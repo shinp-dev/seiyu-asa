@@ -767,8 +767,8 @@ function bind(){
     render();
   };
 
-  $('[data-eat-day]').forEach(b=>b.onclick=()=>eatDay(b.dataset.eatDay));
-  $('[data-eat]').forEach(b=>b.onclick=()=>{
+  $$('[data-eat-day]').forEach(b=>b.onclick=()=>eatDay(b.dataset.eatDay));
+  $$('[data-eat]').forEach(b=>b.onclick=()=>{
     const a=history(),h=a.find(x=>x.id===b.dataset.eat);
     if(h){h.status='eaten';write(K.history,a);S.rec=null;render()}
   });
