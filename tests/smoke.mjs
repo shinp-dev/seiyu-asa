@@ -25,5 +25,12 @@ assert.ok(app.includes('/api/product/lookup?jan='),'Open Food Facts proxy fallba
 assert.ok(app.includes('findSeiyuAlternatives'),'Seiyu alternative discovery missing');
 assert.ok(app.includes('recordDecision'),'what-if decision tracking missing');
 assert.ok(app.includes('serviceWorker.register'),'service worker registration missing');
+assert.ok(app.includes('scanBarcodeImage'),'barcode image scan missing');
+assert.ok(app.includes('runNameSearch'),'Seiyu product-name search fallback missing');
+assert.ok(app.includes('monthDecisionSummary'),'what-if monthly summary missing');
+assert.ok(app.includes('data-stock-jan'),'official Seiyu stock lookup missing');
+assert.ok(app.includes('productQuery'),'product dictionary search missing');
+assert.ok(app.includes('alternativeScore'),'alternative ranking missing');
+assert.ok(app.includes('recDate'),'daily recommendation refresh missing');
 
 console.log('smoke: OK');
