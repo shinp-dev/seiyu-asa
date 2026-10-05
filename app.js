@@ -576,7 +576,7 @@ function renderHistory(){
     const planned=xs.length-eaten.length;
     const price=eaten.reduce((a,x)=>a+(Number(x.price)||0),0);
     const kcal=eaten.reduce((a,x)=>a+(Number(x.kcal)||0),0);
-    html+='<section class="day"><div class="day-head"><h3>'+prettyDate(d)+'</h3><span>'+yen(price)+' / '+kc(kcal)+(planned?' / 予定 '+planned+'件':'')+'</span></div>'+xs.map(historyItem).join('')+'</section>';
+    html+='<section class="day"><div class="day-head"><div><h3>'+prettyDate(d)+'</h3><span>'+yen(price)+' / '+kc(kcal)+(planned?' / 予定 '+planned+'件':'')+'</span></div>'+(planned?'<button data-eat-day="'+d+'">予定を全部「食べた」</button>':'')+'</div>'+xs.map(historyItem).join('')+'</section>';
   });
   return html;
 }
@@ -611,7 +611,23 @@ function renderProducts(){
     '</div>'+
     (ps.length?ps.map(productDetailCard).join(''):'<p class="empty">該当する商品はありません。</p>')+
     '<section class="card backup"><h3>端末データ</h3><p>ログインなしなので、必要ならJSONでバックアップできます。</p>'+
-      '<div class="row"><button id="export" class="secondary small">書き出す</button><label class="import-label">読み込む<input id="import" type="file" accept="application/json"></label></div></section>';
+      '<div class="row"><button id="export" class="secondary small">書き出す</button><label class="import-label">読み込む<input id="import" type="file" accept="application/json"></label><button id="reset-data" class="danger-outline small">初期化</button></div></section>';
+}
+
+function eatDay(day){
+  const a=history();
+  let changed=0;
+  a.forEach(h=>{
+    if(h.date===day&&h.status==='planned'){h.status='eaten';changed++}
+  });
+  if(changed){write(K.history,a);S.rec=null;toast(changed+'件を「食べた」にしました');render()}
+}
+function resetData(){
+  if(!confirm('この端末の履歴・登録商品・学習データを削除します。JSONバックアップを残していないデータは戻せません。'))return;
+  Object.values(K).forEach(k=>localStorage.removeItem(k));
+  S.focus='drink';S.fixed='d1';S.rec=null;S.last=null;S.reasonFor=null;S.productFilter='all';
+  toast('端末データを初期化しました');
+  render();
 }
 
 function feedback(id,type){
@@ -751,7 +767,8 @@ function bind(){
     render();
   };
 
-  $$('[data-eat]').forEach(b=>b.onclick=()=>{
+  $('[data-eat-day]').forEach(b=>b.onclick=()=>eatDay(b.dataset.eatDay));
+  $('[data-eat]').forEach(b=>b.onclick=()=>{
     const a=history(),h=a.find(x=>x.id===b.dataset.eat);
     if(h){h.status='eaten';write(K.history,a);S.rec=null;render()}
   });
@@ -785,6 +802,8 @@ function bind(){
   if(ex)ex.onclick=exportData;
   const im=$('#import');
   if(im)im.onchange=()=>{if(im.files&&im.files[0])importData(im.files[0])};
+  const rd=$('#reset-data');
+  if(rd)rd.onclick=resetData;
 }
 
 document.addEventListener('visibilitychange',()=>{if(document.hidden)stopScan()});
