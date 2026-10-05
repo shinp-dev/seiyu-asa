@@ -57,3 +57,8 @@
   .dict-metrics{grid-template-columns:repeat(2,1fr)}
   .result-head img{width:60px;height:60px}
 }
+
+.hit{display:block}
+.hit>a{display:flex;justify-content:space-between;gap:10px;text-decoration:none;color:inherit}
+.hit>button{margin-top:8px;border:0;background:var(--soft);color:var(--brand);border-radius:999px;padding:6px 9px;font-size:9px;font-weight:900}
+.tiny-link.choose{color:var(--brand)}
