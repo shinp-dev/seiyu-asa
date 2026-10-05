@@ -34,6 +34,7 @@ export async function onRequestGet(ctx){
         quantity:p.quantity||'',
         servingSize:p.serving_size||'',
         kcal:Number.isFinite(serving)?serving:(Number.isFinite(per100)?per100:null),
+        kcalBasis:Number.isFinite(serving)?(p.serving_size||'1食あたり'):(Number.isFinite(per100)?'100gあたり':''),
         imageUrl:p.image_front_small_url||'',
         categories:Array.isArray(p.categories_tags)?p.categories_tags:[],
         source:'openfoodfacts',
