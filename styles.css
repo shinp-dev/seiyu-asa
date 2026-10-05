@@ -89,3 +89,5 @@
 
 .barcode-upload{display:flex;align-items:center;justify-content:center;margin-top:8px;border:1px dashed #b9d6cb;border-radius:12px;padding:9px;color:var(--brand);font-size:10px;font-weight:900;background:#fbfefd;cursor:pointer}
 .barcode-upload input{display:none}
+
+.insight{display:inline-block;margin:6px 0 1px;padding:6px 9px;border-radius:999px;background:#fff;color:var(--brand);font-size:10px;font-weight:900}
