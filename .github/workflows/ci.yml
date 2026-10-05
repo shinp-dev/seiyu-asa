@@ -42,16 +42,7 @@ jobs:
           node-version: 22
       - run: npm install --package-lock=false
       - run: npm run build
-      - name: Create Pages project if needed
-        shell: bash
-        run: |
-          set -euo pipefail
-          npx wrangler pages project list --json > /tmp/pages.json
-          if node -e "const fs=require('fs'); const j=JSON.parse(fs.readFileSync('/tmp/pages.json','utf8')); process.exit(j.some(p=>p.name==='seiyu-asa')?0:1)"; then
-            echo "Cloudflare Pages project seiyu-asa already exists"
-          else
-            npx wrangler pages project create seiyu-asa --production-branch main
-          fi
+
       - name: Deploy to Cloudflare Pages
         run: |
           npx wrangler pages deploy dist \
