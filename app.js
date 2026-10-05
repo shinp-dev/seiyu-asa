@@ -1,5 +1,7 @@
 const CAT={snack:'お菓子',lunch:'昼メシ',drink:'飲み物'};
 const ICON={snack:'🍫',lunch:'🍙',drink:'🥤'};
+const SOURCE={demo:'デモ',registered:'登録済み',seiyu:'西友ネット',openfoodfacts:'商品DB',manual:'手入力'};
+const REASONS={expensive:'高い',small:'量が足りない',calorie:'カロリーの割に満足しない',taste:'味が好みじゃない',other:'その他'};
 const SEED=[
 {id:'s1',jan:'4900000000016',name:'クリームパン',category:'snack',storePrice:138,netPrice:158,kcal:356,source:'demo'},
 {id:'s2',jan:'4900000000023',name:'チョコバー',category:'snack',storePrice:48,netPrice:58,kcal:118,source:'demo'},
@@ -10,40 +12,687 @@ const SEED=[
 {id:'d1',jan:'4900000000201',name:'コーラ 500ml',category:'drink',storePrice:108,netPrice:128,kcal:225,source:'demo'},
 {id:'d2',jan:'4900000000218',name:'無糖茶 600ml',category:'drink',storePrice:88,netPrice:98,kcal:0,source:'demo'},
 {id:'d3',jan:'4900000000225',name:'炭酸水 500ml',category:'drink',storePrice:79,netPrice:89,kcal:0,source:'demo'}];
-const K={catalog:'sa.catalog',history:'sa.history',stats:'sa.stats'};
-const S={route:'today',focus:'drink',fixed:'d1',rec:null,last:null,stream:null,detector:null};
-const $=s=>document.querySelector(s),$$=s=>Array.from(document.querySelectorAll(s));
-const read=(k,d)=>{try{return JSON.parse(localStorage.getItem(k))||d}catch(e){return d}};
+
+const K={
+  catalog:'sa.catalog',
+  history:'sa.history',
+  stats:'sa.stats',
+  prefs:'sa.prefs',
+  prices:'sa.prices'
+};
+const S={
+  route:'today',
+  focus:'drink',
+  fixed:'d1',
+  rec:null,
+  last:null,
+  lastRec:{},
+  stream:null,
+  detector:null,
+  reasonFor:null,
+  productFilter:'all'
+};
+
+const $=s=>document.querySelector(s);
+const $$=s=>Array.from(document.querySelectorAll(s));
+const read=(k,d)=>{try{const v=JSON.parse(localStorage.getItem(k));return v==null?d:v}catch(e){return d}};
 const write=(k,v)=>localStorage.setItem(k,JSON.stringify(v));
 const esc=v=>String(v==null?'':v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const yen=n=>n!==null&&n!==''&&Number.isFinite(Number(n))?'¥'+Math.round(Number(n)).toLocaleString('ja-JP'):'—';
-const kc=n=>n!==null&&n!==''&&Number.isFinite(Number(n))?Math.round(Number(n))+' kcal':'— kcal';
-const date=()=>new Date().toISOString().slice(0,10);
+const kc=n=>n!==null&&n!==''&&Number.isFinite(Number(n))?Math.round(Number(n)).toLocaleString('ja-JP')+' kcal':'— kcal';
+const signed=(n,suffix)=>!Number.isFinite(n)?'—':(n>0?'+':'')+Math.round(n).toLocaleString('ja-JP')+(suffix||'');
 const uid=()=>Date.now()+'-'+Math.random().toString(36).slice(2,7);
-function catalog(){const m=new Map(SEED.map(p=>[p.id,p]));read(K.catalog,[]).forEach(p=>m.set(p.id,p));return Array.from(m.values())}
-function saveProduct(p){const a=read(K.catalog,[]);const i=a.findIndex(x=>x.id===p.id||(p.jan&&x.jan===p.jan));if(i>=0)a[i]=p;else a.push(p);write(K.catalog,a)}
-function stats(){return read(K.stats,{})}function st(id){return stats()[id]||{proposed:0,selected:0,good:0,meh:0,ng:0}}
-function mod(id,key,delta){const a=stats();a[id]=a[id]||{proposed:0,selected:0,good:0,meh:0,ng:0};a[id][key]=Math.max(0,(a[id][key]||0)+delta);write(K.stats,a)}
+
+function localDate(d){
+  d=d||new Date();
+  const p=n=>String(n).padStart(2,'0');
+  return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate());
+}
+function today(){return localDate(new Date())}
+function prettyDate(v){
+  const d=new Date(v+'T00:00:00');
+  if(Number.isNaN(d.getTime()))return v;
+  const w=['日','月','火','水','木','金','土'][d.getDay()];
+  return (d.getMonth()+1)+'/'+d.getDate()+' ('+w+')';
+}
+function normalizeJan(v){return String(v||'').replace(/[^0-9]/g,'')}
+function validJan(v){return /^\d{8,14}$/.test(normalizeJan(v))}
+function toast(t){
+  const e=document.createElement('div');
+  e.className='toast';
+  e.textContent=t;
+  document.body.appendChild(e);
+  setTimeout(()=>e.classList.add('show'),10);
+  setTimeout(()=>e.remove(),2100);
+}
+
+function loadPrefs(){
+  const p=read(K.prefs,{});
+  if(p.focus&&CAT[p.focus])S.focus=p.focus;
+  if(p.fixed)S.fixed=p.fixed;
+}
+function savePrefs(){write(K.prefs,{focus:S.focus,fixed:S.fixed})}
+
+function catalog(){
+  const m=new Map(SEED.map(p=>[p.id,p]));
+  read(K.catalog,[]).forEach(p=>m.set(p.id,p));
+  return Array.from(m.values());
+}
+function saveProduct(p){
+  const a=read(K.catalog,[]);
+  const i=a.findIndex(x=>x.id===p.id||(p.jan&&x.jan===p.jan));
+  if(i>=0)a[i]=Object.assign({},a[i],p);
+  else a.push(p);
+  write(K.catalog,a);
+}
+function categoryCandidates(c,includeNg){
+  const all=catalog().filter(p=>p.category===c&&(includeNg||!ng(p.id)));
+  const real=all.filter(p=>p.source!=='demo');
+  return real.length?real:all;
+}
+function productById(id){return catalog().find(x=>x.id===id)||null}
+
+function stats(){return read(K.stats,{})}
+function st(id){return stats()[id]||{proposed:0,selected:0,good:0,meh:0,ng:0}}
+function mod(id,key,delta){
+  const a=stats();
+  a[id]=a[id]||{proposed:0,selected:0,good:0,meh:0,ng:0};
+  a[id][key]=Math.max(0,(a[id][key]||0)+delta);
+  write(K.stats,a);
+}
 function ng(id){return st(id).ng>0}
-function toast(t){const e=document.createElement('div');e.className='toast';e.textContent=t;document.body.appendChild(e);setTimeout(()=>e.classList.add('show'),10);setTimeout(()=>e.remove(),1900)}
-function score(p){const x=st(p.id),r=x.proposed?x.selected/x.proposed:.45;return r*100+x.good*8-x.meh*7-(Number(p.kcal)||250)/14-(Number(p.storePrice)||200)/20+Math.random()*20}
-function pick(c){const a=catalog().filter(p=>p.category===c&&!ng(p.id)).sort((a,b)=>score(b)-score(a));return a[0]||null}
-function makeRec(){const r={};Object.keys(CAT).forEach(c=>{let p=c===S.focus?catalog().find(x=>x.id===S.fixed&&!ng(x.id)):null;p=p||pick(c);if(p){r[c]=p;mod(p.id,'proposed',1)}});S.rec=r;return r}
-function card(p){const x=st(p.id),rate=x.proposed?Math.round(x.selected/x.proposed*100):0,d=p.netPrice!==null&&p.storePrice!==null&&Number.isFinite(Number(p.netPrice))&&Number.isFinite(Number(p.storePrice))?Number(p.netPrice)-Number(p.storePrice):null;return '<article class="product card"><div class="ico">'+ICON[p.category]+'</div><div class="grow"><div><span class="badge">'+CAT[p.category]+'</span>'+(ng(p.id)?'<span class="badge bad">NG</span>':'')+'</div><b>'+esc(p.name)+'</b><small>店頭 '+yen(p.storePrice)+(d!==null?' / ネット '+yen(p.netPrice)+' (+'+d+'円)':'')+'</small><small>選ばれ率 '+rate+'%</small></div><div class="num"><b>'+yen(p.storePrice)+'</b><small>'+kc(p.kcal)+'</small></div></article>'}
-function renderToday(){const r=S.rec||makeRec(),ps=Object.values(r),price=ps.reduce((a,p)=>a+(Number(p.storePrice)||0),0),cal=ps.reduce((a,p)=>a+(Number(p.kcal)||0),0);return '<section class="hero"><small>出勤前の西友だけ</small><h2>今日の3点、これでどう？</h2><p>お菓子 + 昼メシ + ペットボトル。夕方の買い物は混ぜない。</p></section><section class="card focus"><b>今日はこれを固定</b><div class="pills">'+Object.keys(CAT).map(c=>'<button data-focus="'+c+'" class="pill '+(S.focus===c?'on':'')+'">'+CAT[c]+'</button>').join('')+'</div><select id="fixed">'+catalog().filter(p=>p.category===S.focus&&!ng(p.id)).map(p=>'<option value="'+p.id+'" '+(p.id===S.fixed?'selected':'')+'>'+esc(p.name)+'</option>').join('')+'</select></section><div class="title"><h3>今日のセット</h3><button id="reroll">別のセット</button></div>'+ps.map(card).join('')+'<section class="summary"><small>合計</small><strong>'+yen(price)+' / '+kc(cal)+'</strong><p>好きな1品はそのまま。残り2つで価格とカロリーを少し整える。</p></section><button class="primary" id="accept">これでいく</button><button class="secondary" data-jump="scan">商品をスキャンして比べる</button>'}
-function accept(){const h=read(K.history,[]);Object.values(S.rec||{}).forEach(p=>{h.push({id:uid(),date:date(),productId:p.id,name:p.name,category:p.category,price:p.storePrice,kcal:p.kcal,status:'planned',feedback:null});mod(p.id,'selected',1)});write(K.history,h);toast('今日の3点に追加しました');S.route='history';render()}
-function renderScan(){return '<section class="hero"><small>店頭で迷ったら</small><h2>バーコードで判定</h2><p>JAN/EANを読み、価格・カロリー・西友の候補を比べる。</p></section><section class="card scan"><div class="video"><video id="video" playsinline muted></video><i></i></div><div class="row"><button class="primary small" id="start">カメラで読む</button><button class="secondary small" id="stop">停止</button></div><div class="manual"><input id="jan" inputmode="numeric" placeholder="JANコードを手入力"><button id="lookup">検索</button></div></section><div id="result">'+(S.last?scanResult(S.last):'')+'</div>'}
-function scanResult(r){if(r.error)return '<div class="error">'+esc(r.error)+'</div>';const p=r.product,has=p.netPrice!==null&&p.storePrice!==null&&Number.isFinite(Number(p.netPrice))&&Number.isFinite(Number(p.storePrice)),d=has?Number(p.netPrice)-Number(p.storePrice):0;let html='<section class="card result"><span class="badge">JAN '+esc(p.jan)+'</span><h3>'+esc(p.name)+'</h3><div class="metrics"><div><small>店頭</small><b>'+yen(p.storePrice)+'</b></div><div><small>ネット参考</small><b>'+yen(p.netPrice)+'</b></div><div><small>kcal</small><b>'+kc(p.kcal)+'</b></div></div>'+(has?'<p class="callout">'+(d>=0?'店頭のほうが '+yen(d)+' 安い':'ネット参考のほうが '+yen(Math.abs(d))+' 安い')+'</p>':'<p class="hint">価格を登録すると差額を出せます。</p>')+registerForm(p)+'</section>';if(r.seiyu&&r.seiyu.length)html+='<div class="title"><h3>西友ネット候補</h3><span>参考価格</span></div>'+r.seiyu.map(x=>'<a class="hit card" target="_blank" rel="noreferrer" href="'+esc(x.url)+'"><div><b>'+esc(x.name)+'</b><small>'+esc(x.size||'')+'</small></div><strong>'+yen(x.taxIncludedPrice||x.price)+'</strong></a>').join('');else html+='<a class="searchlink" target="_blank" rel="noreferrer" href="'+seiyuUrl(p.name)+'">西友ネットスーパーで検索 →</a>';const alt=catalog().filter(x=>x.category===p.category&&x.id!==p.id&&!ng(x.id)).sort((a,b)=>(Number(a.kcal)||9999)-(Number(b.kcal)||9999)).slice(0,3);if(alt.length)html+='<div class="title"><h3>代わりにこれ</h3></div>'+alt.map(card).join('');return html}
-function registerForm(p){return '<form id="register" class="form"><input type="hidden" name="jan" value="'+esc(p.jan)+'"><input type="hidden" name="name" value="'+esc(p.name)+'"><label>種類<select name="category">'+Object.keys(CAT).map(c=>'<option value="'+c+'" '+(p.category===c?'selected':'')+'>'+CAT[c]+'</option>').join('')+'</select></label><label>店頭価格<input name="storePrice" type="number" value="'+(p.storePrice==null?'':p.storePrice)+'"></label><label>ネット参考<input name="netPrice" type="number" value="'+(p.netPrice==null?'':p.netPrice)+'"></label><label>kcal<input name="kcal" type="number" value="'+(p.kcal==null?'':Math.round(p.kcal))+'"></label><button class="primary small">西友商品として登録</button></form>'}
+function clearNg(id){
+  const a=stats();
+  if(a[id])a[id].ng=0;
+  write(K.stats,a);
+}
+function history(){return read(K.history,[])}
+function eatenCount(id){return history().filter(h=>h.productId===id&&h.status==='eaten').length}
+function lastReason(id){
+  return history().slice().reverse().find(h=>h.productId===id&&h.reason&&['meh','ng'].includes(h.feedback))||null;
+}
+function recentProductIds(days){
+  const min=new Date();
+  min.setDate(min.getDate()-(days||7));
+  const key=localDate(min);
+  return history().filter(h=>h.date>=key&&h.status==='eaten').map(h=>h.productId);
+}
+
+function score(p){
+  const x=st(p.id);
+  const r=x.proposed?x.selected/x.proposed:.45;
+  const recent=recentProductIds(5).filter(id=>id===p.id).length;
+  const kcal=Number.isFinite(Number(p.kcal))?Number(p.kcal):250;
+  const price=Number.isFinite(Number(p.storePrice))?Number(p.storePrice):200;
+  return r*100+x.good*10-x.meh*9-x.ng*80-recent*13-kcal/18-price/28+Math.random()*18;
+}
+function pick(c){
+  let a=categoryCandidates(c,false);
+  if(a.length>1&&S.lastRec[c])a=a.filter(p=>p.id!==S.lastRec[c]);
+  return a.sort((a,b)=>score(b)-score(a))[0]||null;
+}
+function resolveFixed(){
+  let p=productById(S.fixed);
+  if(!p||p.category!==S.focus||ng(p.id)){
+    p=categoryCandidates(S.focus,false)[0]||null;
+    S.fixed=p?p.id:null;
+    savePrefs();
+  }
+  return p;
+}
+function makeRec(){
+  const r={};
+  Object.keys(CAT).forEach(c=>{
+    let p=c===S.focus?resolveFixed():null;
+    p=p||pick(c);
+    if(p){
+      r[c]=p;
+      mod(p.id,'proposed',1);
+    }
+  });
+  S.rec=r;
+  return r;
+}
+
+function sourceLabel(p){return SOURCE[p.source]||p.source||''}
+function priceDelta(p){
+  if(p.netPrice===null||p.netPrice===''||p.storePrice===null||p.storePrice==='')return null;
+  const n=Number(p.netPrice),s=Number(p.storePrice);
+  return Number.isFinite(n)&&Number.isFinite(s)?n-s:null;
+}
+function card(p,opts){
+  opts=opts||{};
+  const x=st(p.id);
+  const rate=x.proposed?Math.round(x.selected/x.proposed*100):0;
+  const d=priceDelta(p);
+  const reason=lastReason(p.id);
+  return '<article class="product card '+(ng(p.id)?'is-ng':'')+'">'+
+    '<div class="ico">'+ICON[p.category]+'</div>'+
+    '<div class="grow"><div>'+
+      '<span class="badge">'+CAT[p.category]+'</span>'+
+      (p.source==='demo'?'<span class="badge demo">DEMO</span>':'')+
+      (ng(p.id)?'<span class="badge bad">NG</span>':'')+
+    '</div>'+
+    '<b>'+esc(p.name)+'</b>'+
+    '<small>店頭 '+yen(p.storePrice)+(d!==null?' / ネット '+yen(p.netPrice)+' ('+(d>=0?'+':'')+Math.round(d)+'円)':'')+'</small>'+
+    '<small>選ばれ率 '+rate+'% / 食べた '+eatenCount(p.id)+'回'+(reason?' / 前回: '+esc(reason.reason):'')+'</small>'+
+    '</div>'+
+    '<div class="num"><b>'+yen(p.storePrice)+'</b><small>'+kc(p.kcal)+'</small></div>'+
+    (opts.actions&&ng(p.id)?'<button class="tiny-link" data-unng="'+esc(p.id)+'">NG解除</button>':'')+
+  '</article>';
+}
+
+function recentBaseline(){
+  const rows=history().filter(h=>h.status==='eaten');
+  const by={};
+  rows.forEach(h=>{
+    (by[h.date]||(by[h.date]=[])).push(h);
+  });
+  const days=Object.keys(by).sort().reverse().slice(0,14).map(k=>{
+    const xs=by[k];
+    return {
+      date:k,
+      price:xs.reduce((a,x)=>a+(Number(x.price)||0),0),
+      kcal:xs.reduce((a,x)=>a+(Number(x.kcal)||0),0)
+    };
+  }).filter(x=>x.price||x.kcal);
+  if(days.length<2)return null;
+  return {
+    days:days.length,
+    price:days.reduce((a,x)=>a+x.price,0)/days.length,
+    kcal:days.reduce((a,x)=>a+x.kcal,0)/days.length
+  };
+}
+
+function renderToday(){
+  const r=S.rec||makeRec();
+  const ps=Object.values(r);
+  const price=ps.reduce((a,p)=>a+(Number(p.storePrice)||0),0);
+  const cal=ps.reduce((a,p)=>a+(Number(p.kcal)||0),0);
+  const base=recentBaseline();
+  const comparison=base
+    ?'<p class="compare">最近'+base.days+'日平均より <b>'+signed(price-base.price,'円')+'</b> / <b>'+signed(cal-base.kcal,' kcal')+'</b></p>'
+    :'<p class="compare muted">食べた記録が2日分たまると、いつもの朝との差を表示します。</p>';
+
+  return '<section class="hero"><small>出勤前の西友だけ</small><h2>今日の3点、これでどう？</h2><p>お菓子 + 昼メシ + ペットボトル。夕方の買い物は混ぜない。</p></section>'+
+  '<section class="card focus"><b>今日はこれを固定</b><div class="pills">'+
+    Object.keys(CAT).map(c=>'<button data-focus="'+c+'" class="pill '+(S.focus===c?'on':'')+'">'+CAT[c]+'</button>').join('')+
+    '</div><select id="fixed">'+categoryCandidates(S.focus,false).map(p=>'<option value="'+p.id+'" '+(p.id===S.fixed?'selected':'')+'>'+esc(p.name)+(p.source==='demo'?' (DEMO)':'')+'</option>').join('')+'</select></section>'+
+  '<div class="title"><h3>今日のセット</h3><button id="reroll">別のセット</button></div>'+
+  ps.map(p=>card(p)).join('')+
+  '<section class="summary"><small>合計</small><strong>'+yen(price)+' / '+kc(cal)+'</strong>'+comparison+
+    '<p>'+CAT[S.focus]+'は固定。NG商品と最近食べたものを避けながら、残りを提案しています。</p></section>'+
+  '<button class="primary" id="accept">これでいく</button>'+
+  '<button class="secondary" data-jump="scan">店頭の商品をスキャンして比べる</button>';
+}
+
+function accept(){
+  const h=history();
+  const setId='morning-'+Date.now();
+  Object.values(S.rec||{}).forEach(p=>{
+    h.push({
+      id:uid(),
+      setId:setId,
+      slot:'morning',
+      date:today(),
+      createdAt:new Date().toISOString(),
+      productId:p.id,
+      jan:p.jan||'',
+      name:p.name,
+      category:p.category,
+      price:p.storePrice,
+      kcal:p.kcal,
+      status:'planned',
+      feedback:null,
+      reason:null
+    });
+    mod(p.id,'selected',1);
+  });
+  write(K.history,h);
+  toast('今日の3点を記録しました');
+  S.route='history';
+  render();
+}
+
+function renderScan(){
+  return '<section class="hero"><small>店頭で迷ったら</small><h2>バーコードで判定</h2><p>JAN/EANを読んで、西友ネット参考価格・店頭価格・カロリー・過去の後悔をまとめて確認。</p></section>'+
+  '<section class="card scan"><div class="video"><video id="video" playsinline muted></video><i></i></div>'+
+  '<div class="row"><button class="primary small" id="start">カメラで読む</button><button class="secondary small" id="stop">停止</button></div>'+
+  '<div class="manual"><input id="jan" inputmode="numeric" autocomplete="off" placeholder="JANコードを手入力"><button id="lookup">検索</button></div>'+
+  '<p class="mini-note">カメラが使えないブラウザでもJAN手入力で使えます。</p></section>'+
+  '<div id="result">'+(S.last?scanResult(S.last):'')+'</div>';
+}
+function scanResult(r){
+  if(r.error)return '<div class="error">'+esc(r.error)+'</div>';
+  const p=r.product;
+  const d=priceDelta(p);
+  const reason=lastReason(p.id);
+  let html='';
+
+  if(ng(p.id)){
+    html+='<section class="regret"><b>これ、前に「もう買わない」にしています。</b>'+
+      '<p>'+(reason?esc(reason.reason):'過去の後悔記録があります。')+'</p>'+
+      '<button class="secondary small" data-unng="'+esc(p.id)+'">今回は候補に戻す</button></section>';
+  }else if(reason){
+    html+='<section class="regret mild"><b>前に少し後悔しています。</b><p>'+esc(reason.reason)+'</p></section>';
+  }
+
+  html+='<section class="card result">'+
+    '<div class="result-head">'+
+      (p.imageUrl?'<img src="'+esc(p.imageUrl)+'" alt="" loading="lazy">':'')+
+      '<div><span class="badge">JAN '+esc(p.jan)+'</span>'+
+      (sourceLabel(p)?'<span class="badge source">'+esc(sourceLabel(p))+'</span>':'')+
+      '<h3>'+esc(p.name)+'</h3>'+
+      (p.quantity?'<small>'+esc(p.quantity)+'</small>':'')+
+      '</div></div>'+
+    '<div class="metrics"><div><small>店頭</small><b>'+yen(p.storePrice)+'</b></div>'+
+    '<div><small>ネット参考</small><b>'+yen(p.netPrice)+'</b></div>'+
+    '<div><small>kcal</small><b>'+kc(p.kcal)+'</b></div></div>'+
+    (d!==null?'<p class="callout">'+(d>=0?'店頭のほうが '+yen(d)+' 安い':'ネット参考のほうが '+yen(Math.abs(d))+' 安い')+'</p>':'<p class="hint">店頭価格を登録するとネット参考価格との差額を出せます。</p>')+
+    (p.sourceUrl?'<a class="source-link" target="_blank" rel="noreferrer" href="'+esc(p.sourceUrl)+'">情報元を確認 →</a>':'')+
+    registerForm(p)+
+  '</section>';
+
+  if(r.seiyu&&r.seiyu.length){
+    html+='<div class="title"><h3>西友ネット候補</h3><span>見学ページ参考価格</span></div>'+
+      r.seiyu.map(x=>'<a class="hit card" target="_blank" rel="noreferrer" href="'+esc(x.url)+'"><div><b>'+esc(x.name)+'</b><small>'+esc(x.size||'')+'</small></div><strong>'+yen(x.taxIncludedPrice||x.price)+'</strong></a>').join('');
+  }else if(p.name&&!/^JAN /.test(p.name)){
+    html+='<a class="searchlink" target="_blank" rel="noreferrer" href="'+seiyuUrl(p.name)+'">西友ネットスーパーで名前検索 →</a>';
+  }
+
+  const alt=categoryCandidates(p.category,false).filter(x=>x.id!==p.id)
+    .sort((a,b)=>{
+      const ak=Number.isFinite(Number(a.kcal))?Number(a.kcal):99999;
+      const bk=Number.isFinite(Number(b.kcal))?Number(b.kcal):99999;
+      return ak-bk;
+    }).slice(0,3);
+  if(alt.length)html+='<div class="title"><h3>代わりにこれ</h3><span>同カテゴリ</span></div>'+alt.map(x=>card(x)).join('');
+  return html;
+}
+function registerForm(p){
+  return '<form id="register" class="form">'+
+    '<input type="hidden" name="jan" value="'+esc(p.jan)+'">'+
+    '<label class="wide">商品名<input name="name" value="'+esc(p.name)+'"></label>'+
+    '<label>種類<select name="category">'+Object.keys(CAT).map(c=>'<option value="'+c+'" '+(p.category===c?'selected':'')+'>'+CAT[c]+'</option>').join('')+'</select></label>'+
+    '<label>店頭価格<input name="storePrice" type="number" min="0" inputmode="numeric" value="'+(p.storePrice==null?'':p.storePrice)+'"></label>'+
+    '<label>ネット参考<input name="netPrice" type="number" min="0" inputmode="numeric" value="'+(p.netPrice==null?'':p.netPrice)+'"></label>'+
+    '<label>kcal<input name="kcal" type="number" min="0" inputmode="numeric" value="'+(p.kcal==null?'':Math.round(p.kcal))+'"></label>'+
+    '<button class="primary small">この内容で保存</button></form>';
+}
 function seiyuUrl(q){return 'https://netsuper.rakuten.co.jp/seiyu/search/?keyword='+encodeURIComponent(q||'')}
-async function searchSeiyu(q){try{const c=new AbortController(),t=setTimeout(()=>c.abort(),4500),r=await fetch('/api/seiyu/search?q='+encodeURIComponent(q),{signal:c.signal});clearTimeout(t);if(!r.ok)return[];const j=await r.json();return Array.isArray(j.items)?j.items:[]}catch(e){return[]}}
-async function lookupJan(jan){jan=String(jan||'').trim();if(!/^d{8,14}$/.test(jan))return{error:'JAN/EANコードを確認してください'};let p=catalog().find(x=>x.jan===jan);if(!p){try{const r=await fetch('https://world.openfoodfacts.org/api/v2/product/'+encodeURIComponent(jan)+'.json?fields=product_name,product_name_ja,nutriments');if(r.ok){const j=await r.json(),x=j.product;if(j.status===1&&x){const s=Number(x.nutriments&&x.nutriments['energy-kcal_serving']),h=Number(x.nutriments&&x.nutriments['energy-kcal_100g']);p={id:'jan-'+jan,jan:jan,name:x.product_name_ja||x.product_name||('JAN '+jan),category:'snack',storePrice:null,netPrice:null,kcal:Number.isFinite(s)?s:(Number.isFinite(h)?h:null),source:'openfoodfacts'}}}}catch(e){}if(!p)p={id:'jan-'+jan,jan:jan,name:'JAN '+jan,category:'snack',storePrice:null,netPrice:null,kcal:null,source:'manual'}}return{product:p,seiyu:await searchSeiyu(p.name)}}
-async function doLookup(jan){const e=$('#result');if(e)e.innerHTML='<p class="loading">商品を調べています…</p>';S.last=await lookupJan(jan);if(e)e.innerHTML=scanResult(S.last);bind()}
-async function startScan(){if(!('BarcodeDetector'in window)){toast('自動読取に未対応です。JAN手入力を使ってください。');return}try{const v=$('#video');S.stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}},audio:false});v.srcObject=S.stream;await v.play();S.detector=new BarcodeDetector({formats:['ean_13','ean_8','upc_a','upc_e']});const loop=async()=>{if(!S.detector)return;try{const a=await S.detector.detect(v);if(a[0]&&a[0].rawValue){stopScan();doLookup(a[0].rawValue);return}}catch(e){}requestAnimationFrame(loop)};loop()}catch(e){toast('カメラを開始できませんでした')}}
-function stopScan(){if(S.stream)S.stream.getTracks().forEach(t=>t.stop());S.stream=null;S.detector=null}
-function renderHistory(){const a=read(K.history,[]).slice().reverse();return '<section class="hero"><small>後悔も忘れない</small><h2>食べたもの</h2><p>「もう買わない」を残すと次回提案から外す。</p></section>'+(a.length?a.map(h=>'<article class="card hist"><div><b>'+esc(h.name)+'</b><small>'+esc(h.date)+' / '+yen(h.price)+' / '+kc(h.kcal)+'</small></div><div class="actions">'+(h.status==='planned'?'<button data-eat="'+h.id+'">食べた</button>':'<span>食べた</span>')+'<button data-fb="good" data-id="'+h.id+'" class="'+(h.feedback==='good'?'on':'')+'">よかった</button><button data-fb="meh" data-id="'+h.id+'" class="'+(h.feedback==='meh'?'on':'')+'">微妙</button><button data-fb="ng" data-id="'+h.id+'" class="'+(h.feedback==='ng'?'danger':'')+'">もう買わない</button></div></article>').join(''):'<p class="empty">まだ履歴がありません。</p>')}
-function renderProducts(){return '<section class="hero"><small>自分専用の西友DB</small><h2>商品辞書</h2><p>選ばれ率・NG・価格差をまとめて確認。</p></section>'+catalog().map(p=>card(p)).join('')}
-function feedback(id,type){const a=read(K.history,[]),h=a.find(x=>x.id===id);if(!h)return;if(h.feedback)mod(h.productId,h.feedback,-1);h.feedback=type;mod(h.productId,type,1);write(K.history,a);if(type==='ng')toast('NGにしました。次回提案から外します');render()}
-function render(){stopScan();$('#app').innerHTML=S.route==='today'?renderToday():S.route==='scan'?renderScan():S.route==='history'?renderHistory():renderProducts();$$('.nav-item').forEach(b=>b.classList.toggle('active',b.dataset.route===S.route));bind()}
-function bind(){$$('.nav-item').forEach(b=>b.onclick=()=>{S.route=b.dataset.route;render()});$$('[data-jump]').forEach(b=>b.onclick=()=>{S.route=b.dataset.jump;render()});$$('[data-focus]').forEach(b=>b.onclick=()=>{S.focus=b.dataset.focus;const p=catalog().find(x=>x.category===S.focus&&!ng(x.id));S.fixed=p?p.id:null;S.rec=null;render()});const f=$('#fixed');if(f)f.onchange=()=>{S.fixed=f.value;S.rec=null;render()};const rr=$('#reroll');if(rr)rr.onclick=()=>{S.rec=null;render()};const ac=$('#accept');if(ac)ac.onclick=accept;const st=$('#start');if(st)st.onclick=startScan;const sp=$('#stop');if(sp)sp.onclick=stopScan;const lu=$('#lookup');if(lu)lu.onclick=()=>doLookup($('#jan').value);const rg=$('#register');if(rg)rg.onsubmit=e=>{e.preventDefault();const d=new FormData(rg),n=v=>v===''?null:Number(v),p={id:'jan-'+d.get('jan'),jan:d.get('jan'),name:d.get('name'),category:d.get('category'),storePrice:n(d.get('storePrice')),netPrice:n(d.get('netPrice')),kcal:n(d.get('kcal')),source:'registered'};saveProduct(p);S.last={product:p,seiyu:S.last&&S.last.seiyu||[]};toast('西友商品として登録しました');render()};$$('[data-eat]').forEach(b=>b.onclick=()=>{const a=read(K.history,[]),h=a.find(x=>x.id===b.dataset.eat);if(h){h.status='eaten';write(K.history,a);render()}});$$('[data-fb]').forEach(b=>b.onclick=()=>feedback(b.dataset.id,b.dataset.fb))}
-document.addEventListener('visibilitychange',()=>{if(document.hidden)stopScan()});render();
+async function fetchJson(url,timeout){
+  const c=new AbortController();
+  const t=setTimeout(()=>c.abort(),timeout||5000);
+  try{
+    const r=await fetch(url,{signal:c.signal});
+    if(!r.ok)return null;
+    return await r.json();
+  }catch(e){return null}
+  finally{clearTimeout(t)}
+}
+async function searchSeiyu(q){
+  if(!q||/^JAN /.test(q))return[];
+  const j=await fetchJson('/api/seiyu/search?q='+encodeURIComponent(q),5000);
+  return j&&Array.isArray(j.items)?j.items:[];
+}
+function inferCategory(p){
+  const text=((p.name||'')+' '+(p.quantity||'')+' '+(p.categories||[]).join(' ')).toLowerCase();
+  if(/コーラ|お茶|茶 |茶$|水|ジュース|飲料|コーヒー|coffee|tea|water|cola|炭酸|スポーツドリンク|ml|mL|リットル/.test(text))return'drink';
+  if(/おにぎり|弁当|丼|サンド|寿司|そば|うどん|パスタ|焼きそば|惣菜/.test(text))return'lunch';
+  return'snack';
+}
+async function lookupJan(raw){
+  const jan=normalizeJan(raw);
+  if(!validJan(jan))return{error:'JAN/EANコードを確認してください（8〜14桁）'};
+
+  let p=catalog().find(x=>x.jan===jan)||null;
+  let exactSeiyu=null;
+
+  const sj=await fetchJson('/api/seiyu/product?jan='+encodeURIComponent(jan),5500);
+  if(sj&&sj.item){
+    exactSeiyu=sj.item;
+    p=Object.assign({},p||{},{
+      id:(p&&p.id)||('jan-'+jan),
+      jan:jan,
+      name:sj.item.name||(p&&p.name)||('JAN '+jan),
+      category:(p&&p.category)||'snack',
+      storePrice:p&&p.storePrice!=null?p.storePrice:null,
+      netPrice:sj.item.taxIncludedPrice||sj.item.price||(p&&p.netPrice)||null,
+      kcal:sj.item.kcal!=null?sj.item.kcal:(p&&p.kcal!=null?p.kcal:null),
+      quantity:sj.item.size||(p&&p.quantity)||'',
+      imageUrl:(p&&p.imageUrl)||'',
+      source:'seiyu',
+      sourceUrl:sj.item.sourceUrl
+    });
+  }
+
+  if(!p||!p.name||/^JAN /.test(p.name)||p.kcal==null||!p.imageUrl){
+    let oj=await fetchJson('/api/product/lookup?jan='+encodeURIComponent(jan),5500);
+    if(!oj||!oj.product){
+      oj=await fetchJson('https://world.openfoodfacts.org/api/v3/product/'+encodeURIComponent(jan)+'?fields=code,product_name,product_name_ja,brands,quantity,serving_size,nutriments,image_front_small_url,categories_tags',5500);
+      if(oj&&oj.product){
+        const x=oj.product,n=x.nutriments||{};
+        const s=Number(n['energy-kcal_serving']),h=Number(n['energy-kcal_100g']);
+        oj={product:{
+          jan:jan,
+          name:x.product_name_ja||x.product_name||'',
+          brand:x.brands||'',
+          quantity:x.quantity||'',
+          servingSize:x.serving_size||'',
+          kcal:Number.isFinite(s)?s:(Number.isFinite(h)?h:null),
+          imageUrl:x.image_front_small_url||'',
+          categories:Array.isArray(x.categories_tags)?x.categories_tags:[],
+          source:'openfoodfacts',
+          sourceUrl:'https://world.openfoodfacts.org/product/'+jan
+        }};
+      }
+    }
+    if(oj&&oj.product){
+      const x=oj.product;
+      p=Object.assign({},x,p||{});
+      p.id=(p&&p.id)||('jan-'+jan);
+      p.jan=jan;
+      if((!p.name||/^JAN /.test(p.name))&&x.name)p.name=x.name;
+      if(p.kcal==null&&x.kcal!=null)p.kcal=x.kcal;
+      if(!p.quantity&&x.quantity)p.quantity=x.quantity;
+      if(!p.imageUrl&&x.imageUrl)p.imageUrl=x.imageUrl;
+      if(!exactSeiyu){
+        p.source='openfoodfacts';
+        p.sourceUrl=x.sourceUrl;
+      }
+      p.storePrice=p.storePrice==null?null:p.storePrice;
+      p.netPrice=p.netPrice==null?null:p.netPrice;
+    }
+  }
+
+  if(!p)p={id:'jan-'+jan,jan:jan,name:'JAN '+jan,category:'snack',storePrice:null,netPrice:null,kcal:null,source:'manual'};
+  p.category=p.category&&CAT[p.category]?p.category:inferCategory(p);
+  if(p.source!=='demo'&&!/^JAN /.test(p.name))saveProduct(p);
+
+  const seiyu=exactSeiyu?[]:await searchSeiyu(p.name);
+  return{product:p,seiyu:seiyu,exactSeiyu:exactSeiyu};
+}
+async function doLookup(jan){
+  const e=$('#result');
+  if(e)e.innerHTML='<p class="loading">西友と商品DBを調べています…</p>';
+  S.last=await lookupJan(jan);
+  if(S.last&&S.last.product&&navigator.vibrate)navigator.vibrate(45);
+  if(e)e.innerHTML=scanResult(S.last);
+  bind();
+}
+
+async function startScan(){
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){
+    toast('このブラウザではカメラを使えません。JAN手入力を使ってください。');
+    return;
+  }
+  if(!('BarcodeDetector'in window)){
+    toast('自動読取に未対応です。JAN手入力を使ってください。');
+    return;
+  }
+  try{
+    const v=$('#video');
+    S.stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}},audio:false});
+    v.srcObject=S.stream;
+    await v.play();
+    S.detector=new BarcodeDetector({formats:['ean_13','ean_8','upc_a','upc_e']});
+    const loop=async()=>{
+      if(!S.detector)return;
+      try{
+        const a=await S.detector.detect(v);
+        if(a[0]&&a[0].rawValue){
+          const jan=normalizeJan(a[0].rawValue);
+          stopScan();
+          doLookup(jan);
+          return;
+        }
+      }catch(e){}
+      requestAnimationFrame(loop);
+    };
+    loop();
+  }catch(e){toast('カメラを開始できませんでした')}
+}
+function stopScan(){
+  if(S.stream)S.stream.getTracks().forEach(t=>t.stop());
+  S.stream=null;
+  S.detector=null;
+}
+
+function monthSummary(){
+  const prefix=today().slice(0,7);
+  const rows=history().filter(h=>h.date&&h.date.startsWith(prefix)&&h.status==='eaten');
+  const days=new Set(rows.map(h=>h.date)).size;
+  const price=rows.reduce((a,h)=>a+(Number(h.price)||0),0);
+  const kcal=rows.reduce((a,h)=>a+(Number(h.kcal)||0),0);
+  const regrets=history().filter(h=>h.date&&h.date.startsWith(prefix)&&['meh','ng'].includes(h.feedback)).length;
+  return{days,price,kcal,regrets};
+}
+function historyItem(h){
+  const active=S.reasonFor===h.id&&['meh','ng'].includes(h.feedback);
+  return '<article class="card hist">'+
+    '<div class="hist-main"><div><b>'+esc(h.name)+'</b><small>'+CAT[h.category]+' / '+yen(h.price)+' / '+kc(h.kcal)+'</small></div>'+
+    '<button class="remove" data-remove="'+h.id+'" aria-label="履歴から削除">×</button></div>'+
+    '<div class="actions">'+
+      (h.status==='planned'?'<button data-eat="'+h.id+'">食べた</button>':'<span>食べた</span>')+
+      '<button data-fb="good" data-id="'+h.id+'" class="'+(h.feedback==='good'?'on':'')+'">よかった</button>'+
+      '<button data-fb="meh" data-id="'+h.id+'" class="'+(h.feedback==='meh'?'on':'')+'">微妙</button>'+
+      '<button data-fb="ng" data-id="'+h.id+'" class="'+(h.feedback==='ng'?'danger':'')+'">もう買わない</button>'+
+    '</div>'+
+    (h.reason?'<p class="reason">理由: '+esc(h.reason)+'</p>':'')+
+    (active?'<div class="reason-picker"><small>理由を残す</small><div>'+
+      Object.keys(REASONS).map(k=>'<button data-reason="'+k+'" data-id="'+h.id+'">'+REASONS[k]+'</button>').join('')+
+    '</div></div>':'')+
+  '</article>';
+}
+function renderHistory(){
+  const all=history().slice().sort((a,b)=>(b.date||'').localeCompare(a.date||'')||String(b.createdAt||b.id).localeCompare(String(a.createdAt||a.id)));
+  const m=monthSummary();
+  let html='<section class="hero"><small>後悔も忘れない</small><h2>食べたもの</h2><p>「もう買わない」と理由を残すと、次の朝と店頭スキャンで思い出させます。</p></section>'+
+    '<section class="month-strip"><div><small>今月 食べた朝</small><b>'+m.days+'日</b></div><div><small>記録金額</small><b>'+yen(m.price)+'</b></div><div><small>記録kcal</small><b>'+kc(m.kcal)+'</b></div><div><small>後悔</small><b>'+m.regrets+'件</b></div></section>';
+  if(!all.length)return html+'<p class="empty">まだ履歴がありません。</p>';
+
+  const groups={};
+  all.forEach(h=>(groups[h.date]||(groups[h.date]=[])).push(h));
+  Object.keys(groups).sort().reverse().forEach(d=>{
+    const xs=groups[d];
+    const price=xs.reduce((a,x)=>a+(Number(x.price)||0),0);
+    const kcal=xs.reduce((a,x)=>a+(Number(x.kcal)||0),0);
+    html+='<section class="day"><div class="day-head"><h3>'+prettyDate(d)+'</h3><span>'+yen(price)+' / '+kc(kcal)+'</span></div>'+xs.map(historyItem).join('')+'</section>';
+  });
+  return html;
+}
+
+function productDetailCard(p){
+  const x=st(p.id),rate=x.proposed?Math.round(x.selected/x.proposed*100):0;
+  const reason=lastReason(p.id);
+  const d=priceDelta(p);
+  return '<article class="card dictionary '+(ng(p.id)?'is-ng':'')+'">'+
+    '<div class="dict-head"><div><span class="badge">'+CAT[p.category]+'</span>'+
+      (p.source==='demo'?'<span class="badge demo">DEMO</span>':'')+
+      (ng(p.id)?'<span class="badge bad">NG</span>':'')+
+      '<h3>'+esc(p.name)+'</h3></div><div class="dict-price"><b>'+yen(p.storePrice)+'</b><small>'+kc(p.kcal)+'</small></div></div>'+
+    '<div class="dict-metrics"><span>提案 '+x.proposed+'回</span><span>採用 '+x.selected+'回</span><span>選ばれ率 '+rate+'%</span><span>食べた '+eatenCount(p.id)+'回</span></div>'+
+    (d!==null?'<p class="price-note">ネット参考 '+yen(p.netPrice)+' / 差 '+signed(d,'円')+'</p>':'')+
+    (reason?'<p class="reason">後悔メモ: '+esc(reason.reason)+'</p>':'')+
+    '<div class="dict-actions">'+(ng(p.id)?'<button data-unng="'+esc(p.id)+'">NG解除</button>':'')+
+      (p.jan?'<button data-rescan="'+esc(p.jan)+'">このJANを確認</button>':'')+'</div>'+
+  '</article>';
+}
+function renderProducts(){
+  let ps=catalog();
+  if(S.productFilter==='ng')ps=ps.filter(p=>ng(p.id));
+  if(S.productFilter==='favorite')ps=ps.filter(p=>{const x=st(p.id);return x.selected>0&&x.good>=x.meh+x.ng});
+  ps.sort((a,b)=>(ng(b.id)?1:0)-(ng(a.id)?1:0)||eatenCount(b.id)-eatenCount(a.id));
+
+  return '<section class="hero"><small>自分専用の西友DB</small><h2>商品辞書</h2><p>選ばれ率・価格差・後悔理由を、使うほど自分向けに育てます。</p></section>'+
+    '<div class="pills filters">'+
+      '<button class="pill '+(S.productFilter==='all'?'on':'')+'" data-filter="all">全部</button>'+
+      '<button class="pill '+(S.productFilter==='favorite'?'on':'')+'" data-filter="favorite">鉄板</button>'+
+      '<button class="pill '+(S.productFilter==='ng'?'on':'')+'" data-filter="ng">NG</button>'+
+    '</div>'+
+    (ps.length?ps.map(productDetailCard).join(''):'<p class="empty">該当する商品はありません。</p>')+
+    '<section class="card backup"><h3>端末データ</h3><p>ログインなしなので、必要ならJSONでバックアップできます。</p>'+
+      '<div class="row"><button id="export" class="secondary small">書き出す</button><label class="import-label">読み込む<input id="import" type="file" accept="application/json"></label></div></section>';
+}
+
+function feedback(id,type){
+  const a=history(),h=a.find(x=>x.id===id);
+  if(!h)return;
+  if(h.feedback)mod(h.productId,h.feedback,-1);
+  h.feedback=type;
+  if(type==='good')h.reason=null;
+  mod(h.productId,type,1);
+  write(K.history,a);
+  if(type==='ng')toast('NGにしました。次回提案から外します');
+  S.reasonFor=['meh','ng'].includes(type)?id:null;
+  S.rec=null;
+  render();
+}
+function setReason(id,key){
+  const a=history(),h=a.find(x=>x.id===id);
+  if(!h)return;
+  h.reason=REASONS[key]||key;
+  write(K.history,a);
+  S.reasonFor=null;
+  render();
+}
+function removeHistory(id){
+  const a=history(),i=a.findIndex(x=>x.id===id);
+  if(i<0)return;
+  const h=a[i];
+  if(h.feedback)mod(h.productId,h.feedback,-1);
+  if(h.status==='planned'||h.status==='eaten')mod(h.productId,'selected',-1);
+  a.splice(i,1);
+  write(K.history,a);
+  S.rec=null;
+  toast('履歴から削除しました');
+  render();
+}
+function recordPrice(p){
+  if(p.storePrice==null&&p.netPrice==null)return;
+  const a=read(K.prices,[]);
+  const last=a.slice().reverse().find(x=>x.jan===p.jan);
+  if(last&&last.storePrice===p.storePrice&&last.netPrice===p.netPrice)return;
+  a.push({jan:p.jan,date:today(),at:new Date().toISOString(),storePrice:p.storePrice,netPrice:p.netPrice});
+  write(K.prices,a.slice(-500));
+}
+
+function exportData(){
+  const payload={
+    version:1,
+    exportedAt:new Date().toISOString(),
+    catalog:read(K.catalog,[]),
+    history:history(),
+    stats:stats(),
+    prefs:read(K.prefs,{}),
+    prices:read(K.prices,[])
+  };
+  const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
+  const u=URL.createObjectURL(blob),a=document.createElement('a');
+  a.href=u;
+  a.download='seiyu-asa-'+today()+'.json';
+  a.click();
+  setTimeout(()=>URL.revokeObjectURL(u),1000);
+}
+async function importData(file){
+  try{
+    const j=JSON.parse(await file.text());
+    if(!j||j.version!==1)throw new Error('bad');
+    if(Array.isArray(j.catalog))write(K.catalog,j.catalog);
+    if(Array.isArray(j.history))write(K.history,j.history);
+    if(j.stats&&typeof j.stats==='object')write(K.stats,j.stats);
+    if(j.prefs&&typeof j.prefs==='object')write(K.prefs,j.prefs);
+    if(Array.isArray(j.prices))write(K.prices,j.prices);
+    loadPrefs();
+    S.rec=null;
+    toast('バックアップを読み込みました');
+    render();
+  }catch(e){toast('読み込めないバックアップです')}
+}
+
+function render(){
+  stopScan();
+  $('#app').innerHTML=S.route==='today'?renderToday():S.route==='scan'?renderScan():S.route==='history'?renderHistory():renderProducts();
+  $$('.nav-item').forEach(b=>b.classList.toggle('active',b.dataset.route===S.route));
+  bind();
+}
+function bind(){
+  $$('.nav-item').forEach(b=>b.onclick=()=>{S.route=b.dataset.route;S.reasonFor=null;render()});
+  $$('[data-jump]').forEach(b=>b.onclick=()=>{S.route=b.dataset.jump;render()});
+  $$('[data-focus]').forEach(b=>b.onclick=()=>{
+    S.focus=b.dataset.focus;
+    const p=categoryCandidates(S.focus,false)[0];
+    S.fixed=p?p.id:null;
+    savePrefs();
+    S.rec=null;
+    render();
+  });
+  const f=$('#fixed');
+  if(f)f.onchange=()=>{S.fixed=f.value;savePrefs();S.rec=null;render()};
+  const rr=$('#reroll');
+  if(rr)rr.onclick=()=>{
+    if(S.rec)Object.keys(S.rec).forEach(c=>{S.lastRec[c]=S.rec[c].id});
+    S.rec=null;
+    render();
+  };
+  const ac=$('#accept');
+  if(ac)ac.onclick=accept;
+  const st=$('#start');
+  if(st)st.onclick=startScan;
+  const sp=$('#stop');
+  if(sp)sp.onclick=stopScan;
+  const lu=$('#lookup');
+  if(lu)lu.onclick=()=>doLookup($('#jan').value);
+  const ji=$('#jan');
+  if(ji)ji.onkeydown=e=>{if(e.key==='Enter')doLookup(ji.value)};
+
+  const rg=$('#register');
+  if(rg)rg.onsubmit=e=>{
+    e.preventDefault();
+    const d=new FormData(rg),num=v=>v===''?null:Number(v);
+    const existing=S.last&&S.last.product||{};
+    const p={
+      id:existing.id||('jan-'+d.get('jan')),
+      jan:String(d.get('jan')),
+      name:String(d.get('name')||'').trim()||('JAN '+d.get('jan')),
+      category:String(d.get('category')),
+      storePrice:num(d.get('storePrice')),
+      netPrice:num(d.get('netPrice')),
+      kcal:num(d.get('kcal')),
+      quantity:existing.quantity||'',
+      imageUrl:existing.imageUrl||'',
+      source:existing.source==='seiyu'?'seiyu':'registered',
+      sourceUrl:existing.sourceUrl||''
+    };
+    saveProduct(p);
+    recordPrice(p);
+    S.last={product:p,seiyu:S.last&&S.last.seiyu||[]};
+    toast('商品情報を保存しました');
+    render();
+  };
+
+  $$('[data-eat]').forEach(b=>b.onclick=()=>{
+    const a=history(),h=a.find(x=>x.id===b.dataset.eat);
+    if(h){h.status='eaten';write(K.history,a);S.rec=null;render()}
+  });
+  $$('[data-fb]').forEach(b=>b.onclick=()=>feedback(b.dataset.id,b.dataset.fb));
+  $$('[data-reason]').forEach(b=>b.onclick=()=>setReason(b.dataset.id,b.dataset.reason));
+  $$('[data-remove]').forEach(b=>b.onclick=()=>removeHistory(b.dataset.remove));
+  $$('[data-unng]').forEach(b=>b.onclick=()=>{
+    clearNg(b.dataset.unng);
+    S.rec=null;
+    toast('NGを解除しました');
+    render();
+  });
+  $$('[data-filter]').forEach(b=>b.onclick=()=>{S.productFilter=b.dataset.filter;render()});
+  $$('[data-rescan]').forEach(b=>b.onclick=()=>{S.route='scan';S.last=null;render();doLookup(b.dataset.rescan)});
+  const ex=$('#export');
+  if(ex)ex.onclick=exportData;
+  const im=$('#import');
+  if(im)im.onchange=()=>{if(im.files&&im.files[0])importData(im.files[0])};
+}
+
+document.addEventListener('visibilitychange',()=>{if(document.hidden)stopScan()});
+loadPrefs();
+if('serviceWorker'in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}));
+render();
