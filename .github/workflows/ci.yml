@@ -14,7 +14,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: npm install
+      - run: npm install --package-lock=false
       - run: npm test
       - run: npm run build
       - name: Verify Pages output
@@ -40,7 +40,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: npm install
+      - run: npm install --package-lock=false
       - run: npm run build
       - name: Create Pages project if needed
         shell: bash
