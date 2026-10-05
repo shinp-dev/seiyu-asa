@@ -1,4 +1,4 @@
-name: CI
+name: CI and Deploy
 
 on:
   push:
@@ -23,3 +23,39 @@ jobs:
           test -f dist/app.js
           test -f functions/api/seiyu/search.js
           test -f functions/api/seiyu/product.js
+          test -f functions/api/product/lookup.js
+
+  deploy:
+    if: github.event_name != 'pull_request'
+    needs: verify
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      deployments: write
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - run: npm run build
+      - name: Create Pages project if needed
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx wrangler pages project list --json > /tmp/pages.json
+          if node -e "const fs=require('fs'); const j=JSON.parse(fs.readFileSync('/tmp/pages.json','utf8')); process.exit(j.some(p=>p.name==='seiyu-asa')?0:1)"; then
+            echo "Cloudflare Pages project seiyu-asa already exists"
+          else
+            npx wrangler pages project create seiyu-asa --production-branch main
+          fi
+      - name: Deploy to Cloudflare Pages
+        run: |
+          npx wrangler pages deploy dist \
+            --project-name=seiyu-asa \
+            --branch=main \
+            --commit-hash="${GITHUB_SHA}" \
+            --commit-message="${{ github.event.head_commit.message || 'manual deploy' }}"
