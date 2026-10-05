@@ -32,7 +32,9 @@ const S={
   stream:null,
   detector:null,
   reasonFor:null,
-  productFilter:'all'
+  productFilter:'all',
+  nameResults:[],
+  nameQuery:''
 };
 
 const $=s=>document.querySelector(s);
@@ -292,9 +294,29 @@ function renderScan(){
   '<div class="row"><button class="primary small" id="start">カメラで読む</button><button class="secondary small" id="stop">停止</button></div>'+
   '<div class="manual"><input id="jan" inputmode="numeric" autocomplete="off" placeholder="JANコードを手入力"><button id="lookup">検索</button></div>'+
   '<label class="barcode-upload">バーコード写真から読む<input id="barcode-image" type="file" accept="image/*" capture="environment"></label>'+
-  '<p class="mini-note">自動読取に未対応でもJAN手入力で使えます。</p></section>'+
+  '<p class="mini-note">自動読取に未対応でもJAN手入力で使えます。</p>'+
+  '<div class="name-search"><input id="name-q" value="'+esc(S.nameQuery)+'" placeholder="商品名でも西友を検索"><button id="name-search">検索</button></div>'+
+  '<div id="name-results">'+renderNameResults()+'</div></section>'+
   '<div id="result">'+(S.last?scanResult(S.last):'')+'</div>';
 }
+function renderNameResults(){
+  if(!S.nameResults.length)return'';
+  return '<div class="name-hits">'+S.nameResults.slice(0,6).map(x=>
+    '<article class="name-hit"><a target="_blank" rel="noreferrer" href="'+esc(x.url)+'"><span><b>'+esc(x.name)+'</b><small>'+esc(x.size||'')+'</small></span><strong>'+yen(x.taxIncludedPrice||x.price)+'</strong></a>'+
+    (x.jan?'<button data-lookup-jan="'+esc(x.jan)+'">JANで詳しく</button>':'')+'</article>'
+  ).join('')+'</div>';
+}
+async function runNameSearch(q){
+  q=String(q||'').trim();
+  if(!q){toast('商品名を入れてください');return}
+  S.nameQuery=q;
+  const box=$('#name-results');
+  if(box)box.innerHTML='<p class="loading">西友を検索しています…</p>';
+  S.nameResults=await searchSeiyu(q);
+  if(box)box.innerHTML=renderNameResults()||'<p class="empty">候補が見つかりませんでした。</p>';
+  bind();
+}
+
 function scanResult(r){
   if(r.error)return '<div class="error">'+esc(r.error)+'</div>';
   const p=r.product;
@@ -833,6 +855,9 @@ function bind(){
   if(ji)ji.onkeydown=e=>{if(e.key==='Enter')doLookup(ji.value)};
   const bi=$('#barcode-image');
   if(bi)bi.onchange=()=>{if(bi.files&&bi.files[0])scanBarcodeImage(bi.files[0])};
+  const nq=$('#name-q'),ns=$('#name-search');
+  if(ns)ns.onclick=()=>runNameSearch(nq&&nq.value);
+  if(nq)nq.onkeydown=e=>{if(e.key==='Enter')runNameSearch(nq.value)};
 
   const rg=$('#register');
   if(rg)rg.onsubmit=e=>{
