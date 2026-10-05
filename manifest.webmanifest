@@ -1,0 +1,9 @@
+{
+  "name": "もしあの時 - 朝の西友3点セット",
+  "short_name": "西友あさ",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#f5f7f6",
+  "theme_color": "#087a61",
+  "lang": "ja"
+}
