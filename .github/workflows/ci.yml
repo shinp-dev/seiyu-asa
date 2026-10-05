@@ -24,6 +24,7 @@ jobs:
           test -f functions/api/seiyu/search.js
           test -f functions/api/seiyu/product.js
           test -f functions/api/product/lookup.js
+          test -f functions/api/maker/lookup.js
 
   deploy:
     if: github.event_name != 'pull_request'
