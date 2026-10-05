@@ -320,7 +320,12 @@ function scanResult(r){
       const bk=Number.isFinite(Number(b.kcal))?Number(b.kcal):99999;
       return ak-bk;
     }).slice(0,3);
-  if(alt.length)html+='<div class="title"><h3>代わりにこれ</h3><span>同カテゴリ</span></div>'+alt.map(x=>card(x,{choose:true})).join('');
+  if(alt.length)html+='<div class="title"><h3>手元の候補</h3><span>同カテゴリ</span></div>'+alt.map(x=>card(x,{choose:true})).join('');
+  html+='<button class="secondary find-alts" id="find-alts">'+((r.alternatives&&r.alternatives.length)?'西友の別候補を更新':'西友で代わりを探す')+'</button>';
+  if(r.alternatives&&r.alternatives.length){
+    html+='<div class="title"><h3>西友で代わりにこれ</h3><span>ネット参考価格</span></div>'+
+      r.alternatives.map(x=>card(x,{choose:true,preferNet:true})).join('');
+  }
   return html;
 }
 function registerForm(p){
