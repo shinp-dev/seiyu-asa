@@ -323,6 +323,7 @@ function scanResult(r){
     '<div><small>kcal</small><b>'+kc(p.kcal)+'</b>'+(p.kcalBasis?'<em>'+esc(p.kcalBasis)+'</em>':'')+'</div></div>'+
     (d!==null?'<p class="callout">'+(d>=0?'店頭のほうが '+yen(d)+' 安い':'ネット参考のほうが '+yen(Math.abs(d))+' 安い')+'</p>':'<p class="hint">店頭価格を登録するとネット参考価格との差額を出せます。</p>')+
     (p.sourceUrl?'<a class="source-link" target="_blank" rel="noreferrer" href="'+esc(p.sourceUrl)+'">情報元を確認 →</a>':'')+
+    (p.jan?'<button class="stock-link" data-stock-jan="'+esc(p.jan)+'">西友の店舗在庫を確認</button>':'')+
     registerForm(p)+
     '<button class="secondary" data-use-scan="1">今日の3点でこの商品を優先</button>'+
   '</section>';
@@ -888,6 +889,12 @@ function bind(){
     if(!p)return;
     if(p.source!=='demo')saveProduct(p);
     S.focus=p.category;S.fixed=p.id;savePrefs();S.rec=null;S.route='today';toast('今日の優先商品にしました');render();
+  });
+  $$('[data-stock-jan]').forEach(b=>b.onclick=()=>{
+    const jan=b.dataset.stockJan;
+    if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(jan).catch(()=>{});
+    window.open('https://www.seiyu.co.jp/stock/','_blank','noopener');
+    toast('JAN '+jan+' をコピーしました');
   });
   const fa=$('#find-alts');
   if(fa)fa.onclick=findSeiyuAlternatives;
