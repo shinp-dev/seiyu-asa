@@ -86,3 +86,6 @@
 .decision-list div{display:flex;justify-content:space-between;gap:10px;padding:5px 0;font-size:9px}
 .decision-list span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#52605a}
 .decision-list b{white-space:nowrap}
+
+.barcode-upload{display:flex;align-items:center;justify-content:center;margin-top:8px;border:1px dashed #b9d6cb;border-radius:12px;padding:9px;color:var(--brand);font-size:10px;font-weight:900;background:#fbfefd;cursor:pointer}
+.barcode-upload input{display:none}
