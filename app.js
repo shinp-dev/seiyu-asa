@@ -273,7 +273,8 @@ function renderScan(){
   '<section class="card scan"><div class="video"><video id="video" playsinline muted></video><i></i></div>'+
   '<div class="row"><button class="primary small" id="start">カメラで読む</button><button class="secondary small" id="stop">停止</button></div>'+
   '<div class="manual"><input id="jan" inputmode="numeric" autocomplete="off" placeholder="JANコードを手入力"><button id="lookup">検索</button></div>'+
-  '<p class="mini-note">カメラが使えないブラウザでもJAN手入力で使えます。</p></section>'+
+  '<label class="barcode-upload">バーコード写真から読む<input id="barcode-image" type="file" accept="image/*" capture="environment"></label>'+
+  '<p class="mini-note">自動読取に未対応でもJAN手入力で使えます。</p></section>'+
   '<div id="result">'+(S.last?scanResult(S.last):'')+'</div>';
 }
 function scanResult(r){
@@ -492,12 +493,25 @@ async function doLookup(jan){
   bind();
 }
 
+async function barcodeFormats(){
+  if(!('BarcodeDetector'in window))return[];
+  try{
+    const supported=await BarcodeDetector.getSupportedFormats();
+    return ['ean_13','ean_8','upc_a','upc_e'].filter(x=>supported.includes(x));
+  }catch(e){return['ean_13','ean_8']}
+}
+async function makeDetector(){
+  const formats=await barcodeFormats();
+  if(!formats.length)return null;
+  try{return new BarcodeDetector({formats:formats})}catch(e){return null}
+}
 async function startScan(){
   if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){
     toast('このブラウザではカメラを使えません。JAN手入力を使ってください。');
     return;
   }
-  if(!('BarcodeDetector'in window)){
+  const detector=await makeDetector();
+  if(!detector){
     toast('自動読取に未対応です。JAN手入力を使ってください。');
     return;
   }
@@ -506,7 +520,7 @@ async function startScan(){
     S.stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}},audio:false});
     v.srcObject=S.stream;
     await v.play();
-    S.detector=new BarcodeDetector({formats:['ean_13','ean_8','upc_a','upc_e']});
+    S.detector=detector;
     const loop=async()=>{
       if(!S.detector)return;
       try{
@@ -523,6 +537,22 @@ async function startScan(){
     loop();
   }catch(e){toast('カメラを開始できませんでした')}
 }
+async function scanBarcodeImage(file){
+  if(!file)return;
+  const detector=await makeDetector();
+  if(!detector){toast('画像の自動読取に未対応です。JAN手入力を使ってください。');return}
+  try{
+    const bitmap=await createImageBitmap(file);
+    const found=await detector.detect(bitmap);
+    if(bitmap.close)bitmap.close();
+    if(found&&found[0]&&found[0].rawValue){
+      doLookup(found[0].rawValue);
+    }else{
+      toast('バーコードを見つけられませんでした');
+    }
+  }catch(e){toast('画像を読み取れませんでした')}
+}
+
 function stopScan(){
   if(S.stream)S.stream.getTracks().forEach(t=>t.stop());
   S.stream=null;
@@ -782,6 +812,8 @@ function bind(){
   if(lu)lu.onclick=()=>doLookup($('#jan').value);
   const ji=$('#jan');
   if(ji)ji.onkeydown=e=>{if(e.key==='Enter')doLookup(ji.value)};
+  const bi=$('#barcode-image');
+  if(bi)bi.onchange=()=>{if(bi.files&&bi.files[0])scanBarcodeImage(bi.files[0])};
 
   const rg=$('#register');
   if(rg)rg.onsubmit=e=>{
