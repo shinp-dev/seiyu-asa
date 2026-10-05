@@ -13,25 +13,54 @@ const SEED=[
 {id:'d2',jan:'4900000000218',name:'無糖茶 600ml',category:'drink',storePrice:88,netPrice:98,kcal:0,source:'demo'},
 {id:'d3',jan:'4900000000225',name:'炭酸水 500ml',category:'drink',storePrice:79,netPrice:89,kcal:0,source:'demo'}];
 
+const MAKER_PREFIXES=[
+  {prefix:'4903110',brand:'ヤマザキ',manufacturer:'山崎製パン',sourceUrl:'https://www.yamazakipan.co.jp/newitem/'},
+  {prefix:'4902410',brand:'フジパン',manufacturer:'フジパン株式会社',sourceUrl:'https://www.fujipan.co.jp/product/'},
+  {prefix:'4901820',brand:'Pasco',manufacturer:'敷島製パン株式会社',sourceUrl:'https://www.pasconet.co.jp/products/'}
+];
+
 const KNOWN_PRODUCTS={
   '4903110797586':{
-    id:'jan-4903110797586',
-    jan:'4903110797586',
-    name:'高級焼きいもあんぱん',
-    brand:'ヤマザキ',
-    manufacturer:'山崎製パン',
-    category:'snack',
-    storePrice:null,
-    netPrice:null,
-    kcal:379,
-    kcalBasis:'1個あたり',
-    quantity:'1個',
-    imageUrl:'',
-    source:'maker',
-    sourceUrl:'https://www.yamazakipan.co.jp/newitem/'
-  }
+    id:'jan-4903110797586',jan:'4903110797586',name:'高級焼きいもあんぱん',
+    brand:'ヤマザキ',manufacturer:'山崎製パン',category:'snack',
+    storePrice:null,netPrice:null,kcal:379,kcalBasis:'1個あたり',quantity:'1個',
+    imageUrl:'',source:'maker',sourceUrl:'https://www.yamazakipan.co.jp/newitem/'
+  },
+
+  '4902410257967':{id:'jan-4902410257967',jan:'4902410257967',name:'スナックサンド マロン',brand:'フジパン',manufacturer:'フジパン株式会社',category:'snack',storePrice:null,netPrice:null,kcal:null,kcalBasis:'',quantity:'',imageUrl:'',source:'maker',sourceUrl:'https://www.fujipan.co.jp/news/054601.html'},
+  '4902410257943':{id:'jan-4902410257943',jan:'4902410257943',name:'スナックサンド りんご',brand:'フジパン',manufacturer:'フジパン株式会社',category:'snack',storePrice:null,netPrice:null,kcal:null,kcalBasis:'',quantity:'',imageUrl:'',source:'maker',sourceUrl:'https://www.fujipan.co.jp/news/054601.html'},
+  '4902410257936':{id:'jan-4902410257936',jan:'4902410257936',name:'スナックサンド 紫いも',brand:'フジパン',manufacturer:'フジパン株式会社',category:'snack',storePrice:null,netPrice:null,kcal:null,kcalBasis:'',quantity:'',imageUrl:'',source:'maker',sourceUrl:'https://www.fujipan.co.jp/news/054601.html'},
+  '4902410257899':{id:'jan-4902410257899',jan:'4902410257899',name:'黒糖スナックサンド パンプキン＆ホイップ',brand:'フジパン',manufacturer:'フジパン株式会社',category:'snack',storePrice:null,netPrice:null,kcal:null,kcalBasis:'',quantity:'',imageUrl:'',source:'maker',sourceUrl:'https://www.fujipan.co.jp/news/054601.html'},
+  '4902410532392':{id:'jan-4902410532392',jan:'4902410532392',name:'生くろわっさん バター',brand:'フジパン',manufacturer:'フジパン株式会社',category:'snack',storePrice:null,netPrice:null,kcal:null,kcalBasis:'',quantity:'',imageUrl:'',source:'maker',sourceUrl:'https://www.fujipan.co.jp/news/054600.html'},
+  '4902410532415':{id:'jan-4902410532415',jan:'4902410532415',name:'生くろわっさん ショコラ',brand:'フジパン',manufacturer:'フジパン株式会社',category:'snack',storePrice:null,netPrice:null,kcal:null,kcalBasis:'',quantity:'',imageUrl:'',source:'maker',sourceUrl:'https://www.fujipan.co.jp/news/054600.html'},
+  '4902410257790':{id:'jan-4902410257790',jan:'4902410257790',name:'うるおいリング キャラメルナッツ',brand:'フジパン',manufacturer:'フジパン株式会社',category:'snack',storePrice:null,netPrice:null,kcal:null,kcalBasis:'',quantity:'',imageUrl:'',source:'maker',sourceUrl:'https://www.fujipan.co.jp/news/054600.html'},
+  '4902410753537':{id:'jan-4902410753537',jan:'4902410753537',name:'スペースアポロ',brand:'フジパン',manufacturer:'フジパン株式会社',category:'snack',storePrice:null,netPrice:null,kcal:null,kcalBasis:'',quantity:'',imageUrl:'',source:'maker',sourceUrl:'https://www.fujipan.co.jp/news/054233.html'},
+  '4902410257349':{id:'jan-4902410257349',jan:'4902410257349',name:'スナックサンド 生チョコ',brand:'フジパン',manufacturer:'フジパン株式会社',category:'snack',storePrice:null,netPrice:null,kcal:null,kcalBasis:'',quantity:'',imageUrl:'',source:'maker',sourceUrl:'https://www.fujipan.co.jp/news/054232.html'},
+  '4902410257356':{id:'jan-4902410257356',jan:'4902410257356',name:'スナックサンド カスタード',brand:'フジパン',manufacturer:'フジパン株式会社',category:'snack',storePrice:null,netPrice:null,kcal:null,kcalBasis:'',quantity:'',imageUrl:'',source:'maker',sourceUrl:'https://www.fujipan.co.jp/news/054232.html'},
+  '4902410254935':{id:'jan-4902410254935',jan:'4902410254935',name:'スナックサンド いちごジャム＆ホイップ',brand:'フジパン',manufacturer:'フジパン株式会社',category:'snack',storePrice:null,netPrice:null,kcal:null,kcalBasis:'',quantity:'',imageUrl:'',source:'maker',sourceUrl:'https://www.fujipan.co.jp/news/054232.html'},
+  '4902410257745':{id:'jan-4902410257745',jan:'4902410257745',name:'スナックサンド 小倉＆ホイップ',brand:'フジパン',manufacturer:'フジパン株式会社',category:'snack',storePrice:null,netPrice:null,kcal:null,kcalBasis:'',quantity:'',imageUrl:'',source:'maker',sourceUrl:'https://www.fujipan.co.jp/news/054232.html'},
+  '4902410231325':{id:'jan-4902410231325',jan:'4902410231325',name:'生ぶれっどろぉる 4個',brand:'フジパン',manufacturer:'フジパン株式会社',category:'snack',storePrice:null,netPrice:null,kcal:null,kcalBasis:'',quantity:'4個',imageUrl:'',source:'maker',sourceUrl:'https://www.fujipan.co.jp/news/053530.html'},
+
+  '4901820323248':{id:'jan-4901820323248',jan:'4901820323248',name:'麦のめぐみ 全粒粉入り食パン 5枚スライス',brand:'Pasco',manufacturer:'敷島製パン株式会社',category:'lunch',storePrice:null,netPrice:null,kcal:null,kcalBasis:'',quantity:'5枚',imageUrl:'',source:'maker',sourceUrl:'https://www.pasconet.co.jp/release/detail/1561/index.html'},
+  '4901820302571':{id:'jan-4901820302571',jan:'4901820302571',name:'麦のめぐみ 全粒粉入り食パン 6枚スライス',brand:'Pasco',manufacturer:'敷島製パン株式会社',category:'lunch',storePrice:null,netPrice:null,kcal:null,kcalBasis:'',quantity:'6枚',imageUrl:'',source:'maker',sourceUrl:'https://www.pasconet.co.jp/release/detail/1561/index.html'},
+  '4901820008053':{id:'jan-4901820008053',jan:'4901820008053',name:'麦のめぐみ 全粒粉入り食パン 8枚スライス',brand:'Pasco',manufacturer:'敷島製パン株式会社',category:'lunch',storePrice:null,netPrice:null,kcal:null,kcalBasis:'',quantity:'8枚',imageUrl:'',source:'maker',sourceUrl:'https://www.pasconet.co.jp/release/detail/1561/index.html'},
+  '4901820415226':{id:'jan-4901820415226',jan:'4901820415226',name:'麦のめぐみ 全粒粉入り食パン 10枚スライス',brand:'Pasco',manufacturer:'敷島製パン株式会社',category:'lunch',storePrice:null,netPrice:null,kcal:null,kcalBasis:'',quantity:'10枚',imageUrl:'',source:'maker',sourceUrl:'https://www.pasconet.co.jp/release/detail/1561/index.html'},
+  '4901820335746':{id:'jan-4901820335746',jan:'4901820335746',name:'麦のめぐみ 全粒粉入り食パン 3枚入',brand:'Pasco',manufacturer:'敷島製パン株式会社',category:'lunch',storePrice:null,netPrice:null,kcal:null,kcalBasis:'',quantity:'3枚',imageUrl:'',source:'maker',sourceUrl:'https://www.pasconet.co.jp/release/detail/1561/index.html'}
 };
 
+function makerHint(jan){
+  const m=MAKER_PREFIXES.find(x=>jan.startsWith(x.prefix));
+  if(!m)return null;
+  return{
+    id:'jan-'+jan,jan,
+    name:m.brand+'商品',
+    brand:m.brand,
+    manufacturer:m.manufacturer,
+    category:'snack',
+    storePrice:null,netPrice:null,kcal:null,kcalBasis:'',quantity:'',imageUrl:'',
+    source:'maker',sourceUrl:m.sourceUrl,makerHintOnly:true
+  };
+}
 const K={
   catalog:'sa.catalog',
   history:'sa.history',
@@ -370,6 +399,7 @@ function scanResult(r){
       (p.source==='maker'?'<span class="badge source">西友店頭とネット掲載は別</span>':'')+
       '<h3>'+esc(p.name)+'</h3>'+
       (p.quantity?'<small>'+esc(p.quantity)+'</small>':'')+
+      (p.manufacturer?'<small>'+esc(p.manufacturer)+'</small>':'')+
       '</div></div>'+
     '<div class="metrics"><div><small>店頭</small><b>'+yen(p.storePrice)+'</b></div>'+
     '<div><small>ネット参考</small><b>'+yen(p.netPrice)+'</b></div>'+
@@ -377,7 +407,7 @@ function scanResult(r){
     (d!==null?'<p class="callout">'+(d>=0?'店頭のほうが '+yen(d)+' 安い':'ネット参考のほうが '+yen(Math.abs(d))+' 安い')+'</p>':'<p class="hint">店頭価格を登録するとネット参考価格との差額を出せます。</p>')+
     (p.sourceUrl?'<a class="source-link" target="_blank" rel="noreferrer" href="'+esc(p.sourceUrl)+'">情報元を確認 →</a>':'')+
     (p.jan?'<button class="stock-link" data-stock-jan="'+esc(p.jan)+'">西友の店舗在庫を確認</button>':'')+
-    (p.source==='maker'?'<p class="hint">メーカー公式で商品を特定しています。西友の店頭取扱いは、ネットスーパー掲載とは別に扱います。</p>':'')+
+    (p.source==='maker'?'<p class="hint">'+(p.makerHintOnly?esc(p.brand)+'製品まではJANから判定できました。商品名・価格は未登録なので、分かれば下で保存できます。':'メーカー公式で商品を特定しています。西友の店頭取扱いは、ネットスーパー掲載とは別に扱います。')+'</p>':'')+
     registerForm(p)+
     '<button class="secondary" data-use-scan="1">今日の3点でこの商品を優先</button>'+
   '</section>';
@@ -557,7 +587,7 @@ async function lookupJan(raw){
       if(!p.kcalBasis&&x.kcalBasis)p.kcalBasis=x.kcalBasis;
       if(!p.quantity&&x.quantity)p.quantity=x.quantity;
       if(!p.imageUrl&&x.imageUrl)p.imageUrl=x.imageUrl;
-      if(!exactSeiyu){
+      if(!exactSeiyu&&p.source!=='maker'){
         p.source='openfoodfacts';
         p.sourceUrl=x.sourceUrl;
       }
@@ -566,7 +596,7 @@ async function lookupJan(raw){
     }
   }
 
-  if(!p)p={id:'jan-'+jan,jan:jan,name:'JAN '+jan,category:'snack',storePrice:null,netPrice:null,kcal:null,source:'manual'};
+  if(!p)p=makerHint(jan)||{id:'jan-'+jan,jan:jan,name:'JAN '+jan,category:'snack',storePrice:null,netPrice:null,kcal:null,source:'manual'};
   p.category=p.category&&CAT[p.category]?p.category:inferCategory(p);
   if(p.source!=='demo'&&!/^JAN /.test(p.name))saveProduct(p);
 
