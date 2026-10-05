@@ -18,7 +18,8 @@ const K={
   history:'sa.history',
   stats:'sa.stats',
   prefs:'sa.prefs',
-  prices:'sa.prices'
+  prices:'sa.prices',
+  decisions:'sa.decisions'
 };
 const S={
   route:'today',
@@ -528,6 +529,44 @@ function stopScan(){
   S.detector=null;
 }
 
+function recordDecision(original,replacement){
+  if(!original||!replacement||original.id===replacement.id)return;
+  const ok=Number(original.kcal),rk=Number(replacement.kcal);
+  const op=Number(original.storePrice!=null?original.storePrice:original.netPrice);
+  const rp=Number(replacement.storePrice!=null?replacement.storePrice:replacement.netPrice);
+  const a=read(K.decisions,[]);
+  a.push({
+    id:uid(),date:today(),at:new Date().toISOString(),
+    original:{id:original.id,jan:original.jan||'',name:original.name,kcal:original.kcal,price:Number.isFinite(op)?op:null},
+    replacement:{id:replacement.id,jan:replacement.jan||'',name:replacement.name,kcal:replacement.kcal,price:Number.isFinite(rp)?rp:null},
+    kcalDiff:Number.isFinite(ok)&&Number.isFinite(rk)?ok-rk:null,
+    priceDiff:Number.isFinite(op)&&Number.isFinite(rp)?op-rp:null
+  });
+  write(K.decisions,a.slice(-1000));
+}
+function monthDecisionSummary(){
+  const prefix=today().slice(0,7);
+  const rows=read(K.decisions,[]).filter(x=>x.date&&x.date.startsWith(prefix));
+  const savedKcal=rows.reduce((a,x)=>a+(Number.isFinite(Number(x.kcalDiff))?Math.max(0,Number(x.kcalDiff)):0),0);
+  const savedYen=rows.reduce((a,x)=>a+(Number.isFinite(Number(x.priceDiff))?Math.max(0,Number(x.priceDiff)):0),0);
+  return{rows:rows.slice().reverse(),count:rows.length,savedKcal:savedKcal,savedYen:savedYen,fatGram:savedKcal/7000*1000};
+}
+function renderDecisionSummary(){
+  const d=monthDecisionSummary();
+  if(!d.count)return '<section class="whatif card"><b>今月の「もしあの時」</b><p>店頭でスキャンして別の商品を選ぶと、ここに選び直しの差が残ります。</p></section>';
+  return '<section class="whatif card">'+
+    '<div class="whatif-head"><div><small>今月の「もしあの時」</small><strong>'+d.count+'回 選び直し</strong></div><div class="whatif-kcal">-'+Math.round(d.savedKcal).toLocaleString('ja-JP')+' kcal</div></div>'+
+    '<p>エネルギー差の単純換算: 体脂肪 約'+Math.round(d.fatGram)+'g分の目安</p>'+
+    (d.savedYen?'<p>価格差で '+yen(d.savedYen)+' 分も抑えました。</p>':'')+
+    '<small class="disclaimer">体脂肪1kg≒約7,000kcalとして単純換算。実際の体重変化を保証するものではありません。</small>'+
+    '<div class="decision-list">'+d.rows.slice(0,3).map(x=>{
+      const kd=x.kcalDiff==null?'—':signed(-Number(x.kcalDiff),' kcal');
+      const pd=x.priceDiff==null?'':(' / '+signed(-Number(x.priceDiff),'円'));
+      return '<div><span>'+esc(x.original.name)+' → '+esc(x.replacement.name)+'</span><b>'+kd+pd+'</b></div>';
+    }).join('')+'</div>'+
+  '</section>';
+}
+
 function monthSummary(){
   const prefix=today().slice(0,7);
   const rows=history().filter(h=>h.date&&h.date.startsWith(prefix)&&h.status==='eaten');
@@ -565,7 +604,8 @@ function renderHistory(){
   const all=history().slice().sort((a,b)=>(b.date||'').localeCompare(a.date||'')||String(b.createdAt||b.id).localeCompare(String(a.createdAt||a.id)));
   const m=monthSummary();
   let html='<section class="hero"><small>後悔も忘れない</small><h2>食べたもの</h2><p>「もう買わない」と理由を残すと、次の朝と店頭スキャンで思い出させます。</p></section>'+
-    '<section class="month-strip"><div><small>今月 食べた朝</small><b>'+m.days+'日</b></div><div><small>記録金額</small><b>'+yen(m.price)+'</b></div><div><small>記録kcal</small><b>'+kc(m.kcal)+'</b></div><div><small>ネットより節約</small><b>'+yen(m.netSaved)+'</b></div><div><small>後悔</small><b>'+m.regrets+'件</b></div></section>';
+    '<section class="month-strip"><div><small>今月 食べた朝</small><b>'+m.days+'日</b></div><div><small>記録金額</small><b>'+yen(m.price)+'</b></div><div><small>記録kcal</small><b>'+kc(m.kcal)+'</b></div><div><small>ネットより節約</small><b>'+yen(m.netSaved)+'</b></div><div><small>後悔</small><b>'+m.regrets+'件</b></div></section>'+
+    renderDecisionSummary();
   if(!all.length)return html+'<p class="empty">まだ履歴がありません。</p>';
 
   const groups={};
@@ -680,7 +720,8 @@ function exportData(){
     history:history(),
     stats:stats(),
     prefs:read(K.prefs,{}),
-    prices:read(K.prices,[])
+    prices:read(K.prices,[]),
+    decisions:read(K.decisions,[])
   };
   const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
   const u=URL.createObjectURL(blob),a=document.createElement('a');
@@ -698,6 +739,7 @@ async function importData(file){
     if(j.stats&&typeof j.stats==='object')write(K.stats,j.stats);
     if(j.prefs&&typeof j.prefs==='object')write(K.prefs,j.prefs);
     if(Array.isArray(j.prices))write(K.prices,j.prices);
+    if(Array.isArray(j.decisions))write(K.decisions,j.decisions);
     loadPrefs();
     S.rec=null;
     toast('バックアップを読み込みました');
@@ -787,6 +829,7 @@ function bind(){
   $$('[data-use-product]').forEach(b=>b.onclick=()=>{
     const p=productById(b.dataset.useProduct)||(S.last&&Array.isArray(S.last.alternatives)?S.last.alternatives.find(x=>x.id===b.dataset.useProduct):null);
     if(!p)return;
+    if(S.last&&S.last.product)recordDecision(S.last.product,p);
     if(p.source!=='demo')saveProduct(p);
     S.focus=p.category;S.fixed=p.id;savePrefs();S.rec=null;S.route='today';toast('今日の優先商品にしました');render();
   });
