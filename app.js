@@ -179,6 +179,7 @@ function card(p,opts){
     '</div>'+
     '<div class="num"><b>'+yen(p.storePrice)+'</b><small>'+kc(p.kcal)+'</small></div>'+
     (opts.actions&&ng(p.id)?'<button class="tiny-link" data-unng="'+esc(p.id)+'">NG解除</button>':'')+
+    (opts.choose?'<button class="tiny-link choose" data-use-product="'+esc(p.id)+'">今日これを優先</button>':'')+
   '</article>';
 }
 
@@ -228,6 +229,12 @@ function renderToday(){
 
 function accept(){
   const h=history();
+  for(let i=h.length-1;i>=0;i--){
+    if(h[i].date===today()&&h[i].status==='planned'&&(h[i].slot==='morning'||!h[i].slot)){
+      mod(h[i].productId,'selected',-1);
+      h.splice(i,1);
+    }
+  }
   const setId='morning-'+Date.now();
   Object.values(S.rec||{}).forEach(p=>{
     h.push({
@@ -291,11 +298,12 @@ function scanResult(r){
     (d!==null?'<p class="callout">'+(d>=0?'店頭のほうが '+yen(d)+' 安い':'ネット参考のほうが '+yen(Math.abs(d))+' 安い')+'</p>':'<p class="hint">店頭価格を登録するとネット参考価格との差額を出せます。</p>')+
     (p.sourceUrl?'<a class="source-link" target="_blank" rel="noreferrer" href="'+esc(p.sourceUrl)+'">情報元を確認 →</a>':'')+
     registerForm(p)+
+    '<button class="secondary" data-use-scan="1">今日の3点でこの商品を優先</button>'+
   '</section>';
 
   if(r.seiyu&&r.seiyu.length){
     html+='<div class="title"><h3>西友ネット候補</h3><span>見学ページ参考価格</span></div>'+
-      r.seiyu.map(x=>'<a class="hit card" target="_blank" rel="noreferrer" href="'+esc(x.url)+'"><div><b>'+esc(x.name)+'</b><small>'+esc(x.size||'')+'</small></div><strong>'+yen(x.taxIncludedPrice||x.price)+'</strong></a>').join('');
+      r.seiyu.map(x=>'<article class="hit card"><a target="_blank" rel="noreferrer" href="'+esc(x.url)+'"><div><b>'+esc(x.name)+'</b><small>'+esc(x.size||'')+'</small></div><strong>'+yen(x.taxIncludedPrice||x.price)+'</strong></a>'+(x.jan?'<button data-lookup-jan="'+esc(x.jan)+'">詳しく見る</button>':'')+'</article>').join('');
   }else if(p.name&&!/^JAN /.test(p.name)){
     html+='<a class="searchlink" target="_blank" rel="noreferrer" href="'+seiyuUrl(p.name)+'">西友ネットスーパーで名前検索 →</a>';
   }
@@ -306,7 +314,7 @@ function scanResult(r){
       const bk=Number.isFinite(Number(b.kcal))?Number(b.kcal):99999;
       return ak-bk;
     }).slice(0,3);
-  if(alt.length)html+='<div class="title"><h3>代わりにこれ</h3><span>同カテゴリ</span></div>'+alt.map(x=>card(x)).join('');
+  if(alt.length)html+='<div class="title"><h3>代わりにこれ</h3><span>同カテゴリ</span></div>'+alt.map(x=>card(x,{choose:true})).join('');
   return html;
 }
 function registerForm(p){
@@ -355,7 +363,7 @@ async function lookupJan(raw){
       id:(p&&p.id)||('jan-'+jan),
       jan:jan,
       name:sj.item.name||(p&&p.name)||('JAN '+jan),
-      category:(p&&p.category)||'snack',
+      category:(p&&p.category)||inferCategory({name:sj.item.name,quantity:sj.item.size}),
       storePrice:p&&p.storePrice!=null?p.storePrice:null,
       netPrice:sj.item.taxIncludedPrice||sj.item.price||(p&&p.netPrice)||null,
       kcal:sj.item.kcal!=null?sj.item.kcal:(p&&p.kcal!=null?p.kcal:null),
@@ -469,14 +477,17 @@ function monthSummary(){
 }
 function historyItem(h){
   const active=S.reasonFor===h.id&&['meh','ng'].includes(h.feedback);
+  const feedback=h.status==='eaten'
+    ?'<button data-fb="good" data-id="'+h.id+'" class="'+(h.feedback==='good'?'on':'')+'">よかった</button>'+
+     '<button data-fb="meh" data-id="'+h.id+'" class="'+(h.feedback==='meh'?'on':'')+'">微妙</button>'+
+     '<button data-fb="ng" data-id="'+h.id+'" class="'+(h.feedback==='ng'?'danger':'')+'">もう買わない</button>'
+    :'';
   return '<article class="card hist">'+
     '<div class="hist-main"><div><b>'+esc(h.name)+'</b><small>'+CAT[h.category]+' / '+yen(h.price)+' / '+kc(h.kcal)+'</small></div>'+
     '<button class="remove" data-remove="'+h.id+'" aria-label="履歴から削除">×</button></div>'+
     '<div class="actions">'+
       (h.status==='planned'?'<button data-eat="'+h.id+'">食べた</button>':'<span>食べた</span>')+
-      '<button data-fb="good" data-id="'+h.id+'" class="'+(h.feedback==='good'?'on':'')+'">よかった</button>'+
-      '<button data-fb="meh" data-id="'+h.id+'" class="'+(h.feedback==='meh'?'on':'')+'">微妙</button>'+
-      '<button data-fb="ng" data-id="'+h.id+'" class="'+(h.feedback==='ng'?'danger':'')+'">もう買わない</button>'+
+      feedback+
     '</div>'+
     (h.reason?'<p class="reason">理由: '+esc(h.reason)+'</p>':'')+
     (active?'<div class="reason-picker"><small>理由を残す</small><div>'+
@@ -495,9 +506,11 @@ function renderHistory(){
   all.forEach(h=>(groups[h.date]||(groups[h.date]=[])).push(h));
   Object.keys(groups).sort().reverse().forEach(d=>{
     const xs=groups[d];
-    const price=xs.reduce((a,x)=>a+(Number(x.price)||0),0);
-    const kcal=xs.reduce((a,x)=>a+(Number(x.kcal)||0),0);
-    html+='<section class="day"><div class="day-head"><h3>'+prettyDate(d)+'</h3><span>'+yen(price)+' / '+kc(kcal)+'</span></div>'+xs.map(historyItem).join('')+'</section>';
+    const eaten=xs.filter(x=>x.status==='eaten');
+    const planned=xs.length-eaten.length;
+    const price=eaten.reduce((a,x)=>a+(Number(x.price)||0),0);
+    const kcal=eaten.reduce((a,x)=>a+(Number(x.kcal)||0),0);
+    html+='<section class="day"><div class="day-head"><h3>'+prettyDate(d)+'</h3><span>'+yen(price)+' / '+kc(kcal)+(planned?' / 予定 '+planned+'件':'')+'</span></div>'+xs.map(historyItem).join('')+'</section>';
   });
   return html;
 }
@@ -685,7 +698,19 @@ function bind(){
     render();
   });
   $$('[data-filter]').forEach(b=>b.onclick=()=>{S.productFilter=b.dataset.filter;render()});
-  $$('[data-rescan]').forEach(b=>b.onclick=()=>{S.route='scan';S.last=null;render();doLookup(b.dataset.rescan)});
+  $('[data-rescan]').forEach(b=>b.onclick=()=>{S.route='scan';S.last=null;render();doLookup(b.dataset.rescan)});
+  $('[data-lookup-jan]').forEach(b=>b.onclick=()=>doLookup(b.dataset.lookupJan));
+  $('[data-use-product]').forEach(b=>b.onclick=()=>{
+    const p=productById(b.dataset.useProduct);
+    if(!p)return;
+    S.focus=p.category;S.fixed=p.id;savePrefs();S.rec=null;S.route='today';toast('今日の優先商品にしました');render();
+  });
+  $('[data-use-scan]').forEach(b=>b.onclick=()=>{
+    const p=S.last&&S.last.product;
+    if(!p)return;
+    if(p.source!=='demo')saveProduct(p);
+    S.focus=p.category;S.fixed=p.id;savePrefs();S.rec=null;S.route='today';toast('今日の優先商品にしました');render();
+  });
   const ex=$('#export');
   if(ex)ex.onclick=exportData;
   const im=$('#import');
