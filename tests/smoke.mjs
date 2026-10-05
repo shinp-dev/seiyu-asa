@@ -32,5 +32,8 @@ assert.ok(app.includes('data-stock-jan'),'official Seiyu stock lookup missing');
 assert.ok(app.includes('productQuery'),'product dictionary search missing');
 assert.ok(app.includes('alternativeScore'),'alternative ranking missing');
 assert.ok(app.includes('recDate'),'daily recommendation refresh missing');
+assert.ok(app.includes("prefix:'4903110'"),'Yamazaki maker prefix missing');
+assert.ok(app.includes("prefix:'4902410'"),'Fuji Pan maker prefix missing');
+assert.ok(app.includes("prefix:'4901820'"),'Pasco maker prefix missing');
 
 console.log('smoke: OK');
