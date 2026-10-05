@@ -357,6 +357,7 @@ function scanResult(r){
     '<div><small>kcal</small><b>'+kc(p.kcal)+'</b>'+(p.kcalBasis?'<em>'+esc(p.kcalBasis)+'</em>':'')+'</div></div>'+
     (d!==null?'<p class="callout">'+(d>=0?'店頭のほうが '+yen(d)+' 安い':'ネット参考のほうが '+yen(Math.abs(d))+' 安い')+'</p>':'<p class="hint">店頭価格を登録するとネット参考価格との差額を出せます。</p>')+
     (p.sourceUrl?'<a class="source-link" target="_blank" rel="noreferrer" href="'+esc(p.sourceUrl)+'">情報元を確認 →</a>':'')+
+    (p.maker&&p.maker.lookupUrl?'<a class="source-link" target="_blank" rel="noreferrer" href="'+esc(p.maker.lookupUrl)+'">'+esc(p.maker.brand)+'公式で確認 →</a>':'')+
     (p.jan?'<button class="stock-link" data-stock-jan="'+esc(p.jan)+'">西友の店舗在庫を確認</button>':'')+
     (p.source==='manual'?'<p class="hint">このJANは外部商品DBで特定できませんでした。商品名と店頭価格を一度保存すれば、次回から端末内で即座に呼び出せます。</p>':'')+
     registerForm(p)+
@@ -586,7 +587,7 @@ async function lookupJan(raw){
 
   if(!p)p={id:'jan-'+jan,jan:jan,name:'未登録商品',category:'snack',storePrice:null,netPrice:null,kcal:null,source:'manual'};
   p.category=p.category&&CAT[p.category]?p.category:inferCategory(p);
-  if(p.source!=='demo'&&!/^JAN /.test(p.name))saveProduct(p);
+  if(p.source!=='demo'&&p.source!=='manual'&&!/^JAN /.test(p.name))saveProduct(p);
 
   const seiyu=exactSeiyu||p.source==='manual'?[]:await searchSeiyu(p.name);
   return{product:p,seiyu:seiyu,exactSeiyu:exactSeiyu};
