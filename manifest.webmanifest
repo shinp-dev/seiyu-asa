@@ -1,9 +1,18 @@
 {
-  "name": "もしあの時 - 朝の西友3点セット",
+  "name": "もしあの時 - 西友あさ",
   "short_name": "西友あさ",
+  "description": "毎朝の西友で、お菓子・昼メシ・飲み物の3点セットを提案する買い物支援アプリ",
   "start_url": "./",
+  "scope": "./",
   "display": "standalone",
   "background_color": "#f5f7f6",
   "theme_color": "#087a61",
-  "lang": "ja"
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
 }
