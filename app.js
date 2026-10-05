@@ -708,14 +708,14 @@ function bind(){
     render();
   });
   $$('[data-filter]').forEach(b=>b.onclick=()=>{S.productFilter=b.dataset.filter;render()});
-  $('[data-rescan]').forEach(b=>b.onclick=()=>{S.route='scan';S.last=null;render();doLookup(b.dataset.rescan)});
-  $('[data-lookup-jan]').forEach(b=>b.onclick=()=>doLookup(b.dataset.lookupJan));
-  $('[data-use-product]').forEach(b=>b.onclick=()=>{
+  $$('[data-rescan]').forEach(b=>b.onclick=()=>{S.route='scan';S.last=null;render();doLookup(b.dataset.rescan)});
+  $$('[data-lookup-jan]').forEach(b=>b.onclick=()=>doLookup(b.dataset.lookupJan));
+  $$('[data-use-product]').forEach(b=>b.onclick=()=>{
     const p=productById(b.dataset.useProduct);
     if(!p)return;
     S.focus=p.category;S.fixed=p.id;savePrefs();S.rec=null;S.route='today';toast('今日の優先商品にしました');render();
   });
-  $('[data-use-scan]').forEach(b=>b.onclick=()=>{
+  $$('[data-use-scan]').forEach(b=>b.onclick=()=>{
     const p=S.last&&S.last.product;
     if(!p)return;
     if(p.source!=='demo')saveProduct(p);
