@@ -46,6 +46,11 @@ const esc=v=>String(v==null?'':v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;'
 const yen=n=>n!==null&&n!==''&&Number.isFinite(Number(n))?'¥'+Math.round(Number(n)).toLocaleString('ja-JP'):'—';
 const kc=n=>n!==null&&n!==''&&Number.isFinite(Number(n))?Math.round(Number(n)).toLocaleString('ja-JP')+' kcal':'— kcal';
 const signed=(n,suffix)=>!Number.isFinite(n)?'—':(n>0?'+':'')+Math.round(n).toLocaleString('ja-JP')+(suffix||'');
+function effectivePrice(p){
+  if(p&&p.storePrice!==null&&p.storePrice!==''&&Number.isFinite(Number(p.storePrice)))return{value:Number(p.storePrice),source:'store'};
+  if(p&&p.netPrice!==null&&p.netPrice!==''&&Number.isFinite(Number(p.netPrice)))return{value:Number(p.netPrice),source:'net'};
+  return{value:null,source:'unknown'};
+}
 const uid=()=>Date.now()+'-'+Math.random().toString(36).slice(2,7);
 
 function localDate(d){
@@ -128,7 +133,8 @@ function score(p){
   const r=x.proposed?x.selected/x.proposed:.45;
   const recent=recentProductIds(5).filter(id=>id===p.id).length;
   const kcal=Number.isFinite(Number(p.kcal))?Number(p.kcal):250;
-  const price=Number.isFinite(Number(p.storePrice))?Number(p.storePrice):200;
+  const ep=effectivePrice(p);
+  const price=Number.isFinite(ep.value)?ep.value:200;
   return r*100+x.good*10-x.meh*9-x.ng*80-recent*13-kcal/18-price/28+Math.random()*18;
 }
 function pick(c){
@@ -234,7 +240,10 @@ function renderToday(){
   const r=S.rec||makeRec();
   const realCount=catalog().filter(p=>p.source!=='demo').length;
   const ps=Object.values(r);
-  const price=ps.reduce((a,p)=>a+(Number(p.storePrice)||0),0);
+  const priced=ps.map(effectivePrice);
+  const price=priced.reduce((a,x)=>a+(Number.isFinite(x.value)?x.value:0),0);
+  const hasNetEstimate=priced.some(x=>x.source==='net');
+  const hasUnknownPrice=priced.some(x=>x.source==='unknown');
   const cal=ps.reduce((a,p)=>a+(Number(p.kcal)||0),0);
   const base=recentBaseline();
   const comparison=base
@@ -248,7 +257,7 @@ function renderToday(){
     '</div><select id="fixed">'+categoryCandidates(S.focus,false).map(p=>'<option value="'+p.id+'" '+(p.id===S.fixed?'selected':'')+'>'+esc(p.name)+(p.source==='demo'?' (DEMO)':'')+'</option>').join('')+'</select></section>'+
   '<div class="title"><h3>今日のセット</h3><button id="reroll">別のセット</button></div>'+
   ps.map(p=>card(p)).join('')+
-  '<section class="summary"><small>合計</small><strong>'+yen(price)+' / '+kc(cal)+'</strong><div class="insight">'+esc(insight)+'</div>'+comparison+
+  '<section class="summary"><small>合計'+(hasNetEstimate?'（ネット参考含む）':'')+(hasUnknownPrice?'（価格未登録あり）':'')+'</small><strong>'+yen(price)+' / '+kc(cal)+'</strong><div class="insight">'+esc(insight)+'</div>'+comparison+
     '<p>'+CAT[S.focus]+'は固定。NG商品と最近食べたものを避けながら、残りを提案しています。</p></section>'+
   '<button class="primary" id="accept">これでいく</button>'+
   '<button class="secondary" data-jump="scan">店頭の商品をスキャンして比べる</button>';
@@ -274,7 +283,8 @@ function accept(){
       jan:p.jan||'',
       name:p.name,
       category:p.category,
-      price:p.storePrice,
+      price:effectivePrice(p).value,
+      priceSource:effectivePrice(p).source,
       netPrice:p.netPrice,
       kcal:p.kcal,
       status:'planned',
@@ -659,10 +669,11 @@ function monthSummary(){
   const prefix=today().slice(0,7);
   const rows=history().filter(h=>h.date&&h.date.startsWith(prefix)&&h.status==='eaten');
   const days=new Set(rows.map(h=>h.date)).size;
-  const price=rows.reduce((a,h)=>a+(Number(h.price)||0),0);
+  const price=rows.reduce((a,h)=>a+(h.priceSource!=='net'?(Number(h.price)||0):0),0);
   const kcal=rows.reduce((a,h)=>a+(Number(h.kcal)||0),0);
   const regrets=history().filter(h=>h.date&&h.date.startsWith(prefix)&&['meh','ng'].includes(h.feedback)).length;
   const netSaved=rows.reduce((a,h)=>{
+    if(h.priceSource==='net')return a;
     const n=Number(h.netPrice),s=Number(h.price);
     return a+(Number.isFinite(n)&&Number.isFinite(s)?Math.max(0,n-s):0);
   },0);
@@ -676,7 +687,7 @@ function historyItem(h){
      '<button data-fb="ng" data-id="'+h.id+'" class="'+(h.feedback==='ng'?'danger':'')+'">もう買わない</button>'
     :'';
   return '<article class="card hist">'+
-    '<div class="hist-main"><div><b>'+esc(h.name)+'</b><small>'+CAT[h.category]+' / '+yen(h.price)+' / '+kc(h.kcal)+(h.netPrice!=null&&h.price!=null&&Number(h.netPrice)>Number(h.price)?' / ネットより'+yen(Number(h.netPrice)-Number(h.price))+'安い':'')+'</small></div>'+
+    '<div class="hist-main"><div><b>'+esc(h.name)+'</b><small>'+CAT[h.category]+' / '+yen(h.price)+(h.priceSource==='net'?'（ネット参考）':'')+' / '+kc(h.kcal)+(h.priceSource!=='net'&&h.netPrice!=null&&h.price!=null&&Number(h.netPrice)>Number(h.price)?' / ネットより'+yen(Number(h.netPrice)-Number(h.price))+'安い':'')+'</small></div>'+
     '<button class="remove" data-remove="'+h.id+'" aria-label="履歴から削除">×</button></div>'+
     '<div class="actions">'+
       (h.status==='planned'?'<button data-eat="'+h.id+'">食べた</button>':'<span>食べた</span>')+
