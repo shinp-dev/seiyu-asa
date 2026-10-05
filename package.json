@@ -3,6 +3,12 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "test": "node tests/smoke.mjs"
+    "build": "node scripts/build.mjs",
+    "test": "node tests/smoke.mjs",
+    "cf:dev": "wrangler pages dev dist",
+    "cf:deploy": "wrangler pages deploy"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
   }
 }
