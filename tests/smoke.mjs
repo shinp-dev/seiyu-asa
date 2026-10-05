@@ -4,10 +4,12 @@ import assert from 'node:assert/strict';
 const read=p=>fs.readFileSync(new URL('../'+p,import.meta.url),'utf8');
 const app=read('app.js');
 const sw=read('sw.js');
+const makerLookup=read('functions/api/maker/lookup.js');
 const functionFiles=[
   'functions/api/seiyu/search.js',
   'functions/api/seiyu/product.js',
-  'functions/api/product/lookup.js'
+  'functions/api/product/lookup.js',
+  'functions/api/maker/lookup.js'
 ];
 
 new Function(app);
