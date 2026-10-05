@@ -767,9 +767,10 @@ function bind(){
   $$('[data-filter]').forEach(b=>b.onclick=()=>{S.productFilter=b.dataset.filter;render()});
   $$('[data-rescan]').forEach(b=>b.onclick=()=>{S.route='scan';S.last=null;render();doLookup(b.dataset.rescan)});
   $$('[data-lookup-jan]').forEach(b=>b.onclick=()=>doLookup(b.dataset.lookupJan));
-  $$('[data-use-product]').forEach(b=>b.onclick=()=>{
-    const p=productById(b.dataset.useProduct);
+  $('[data-use-product]').forEach(b=>b.onclick=()=>{
+    const p=productById(b.dataset.useProduct)||(S.last&&Array.isArray(S.last.alternatives)?S.last.alternatives.find(x=>x.id===b.dataset.useProduct):null);
     if(!p)return;
+    if(p.source!=='demo')saveProduct(p);
     S.focus=p.category;S.fixed=p.id;savePrefs();S.rec=null;S.route='today';toast('今日の優先商品にしました');render();
   });
   $$('[data-use-scan]').forEach(b=>b.onclick=()=>{
@@ -778,6 +779,8 @@ function bind(){
     if(p.source!=='demo')saveProduct(p);
     S.focus=p.category;S.fixed=p.id;savePrefs();S.rec=null;S.route='today';toast('今日の優先商品にしました');render();
   });
+  const fa=$('#find-alts');
+  if(fa)fa.onclick=findSeiyuAlternatives;
   const ex=$('#export');
   if(ex)ex.onclick=exportData;
   const im=$('#import');
