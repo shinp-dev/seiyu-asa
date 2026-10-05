@@ -29,7 +29,9 @@ export async function onRequestGet(ctx){
       .map(m=>number(m[1])).filter(Number.isFinite);
     const price=prices.find(v=>v!==taxIncluded)||prices[0]||null;
     const size=(near.match(/(\d+(?:\.\d+)?\s*(?:g|kg|ml|mL|L|本|個|袋入|袋|食|枚|本入))/i)||[])[1]||'';
-    const kcal=number((text.match(/エネルギー\s*([0-9]+(?:\.[0-9]+)?)\s*kcal/i)||[])[1]);
+    const nutrition=(text.match(/栄養成分\s+(.{1,100}?)\s+当たり[：:]?\s*エネルギー\s*([0-9]+(?:\.[0-9]+)?)\s*kcal/i)||[]);
+    const kcal=number(nutrition[2]||(text.match(/エネルギー\s*([0-9]+(?:\.[0-9]+)?)\s*kcal/i)||[])[1]);
+    const kcalBasis=clean(nutrition[1]||'');
 
     return json({
       item:{
@@ -39,6 +41,7 @@ export async function onRequestGet(ctx){
         price,
         taxIncludedPrice:taxIncluded||price,
         kcal:Number.isFinite(kcal)?kcal:null,
+        kcalBasis:kcalBasis,
         source:'seiyu',
         sourceUrl:target
       },
