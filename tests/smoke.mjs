@@ -33,6 +33,8 @@ assert.ok(app.includes('productQuery'),'product dictionary search missing');
 assert.ok(app.includes('alternativeScore'),'alternative ranking missing');
 assert.ok(app.includes('recDate'),'daily recommendation refresh missing');
 assert.ok(!app.includes('KNOWN_PRODUCTS'),'hardcoded product dictionary must not be bundled');
-assert.ok(!app.includes('MAKER_PREFIXES'),'hardcoded maker prefix table must not be bundled');
+assert.ok(makerLookup.includes("prefix:'4903110'"),'Yamazaki maker route missing');
+assert.ok(makerLookup.includes("prefix:'4902410'"),'Fuji Pan maker route missing');
+assert.ok(makerLookup.includes("prefix:'4901820'"),'Pasco maker route missing');
 
 console.log('smoke: OK');
