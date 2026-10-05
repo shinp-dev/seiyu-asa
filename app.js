@@ -1,6 +1,6 @@
 const CAT={snack:'お菓子',lunch:'昼メシ',drink:'飲み物'};
 const ICON={snack:'🍫',lunch:'🍙',drink:'🥤'};
-const SOURCE={demo:'デモ',registered:'登録済み',seiyu:'西友ネット',openfoodfacts:'商品DB',manual:'手入力'};
+const SOURCE={demo:'デモ',registered:'登録済み',seiyu:'西友ネット',openfoodfacts:'商品DB',maker:'メーカー公式',manual:'手入力'};
 const REASONS={expensive:'高い',small:'量が足りない',calorie:'カロリーの割に満足しない',taste:'味が好みじゃない',other:'その他'};
 const SEED=[
 {id:'s1',jan:'4900000000016',name:'クリームパン',category:'snack',storePrice:138,netPrice:158,kcal:356,source:'demo'},
@@ -547,6 +547,43 @@ async function lookupJan(raw){
     }
   }
 
+  if(!p||!p.name||p.name==='未登録商品'){
+    const mj=await fetchJson('/api/maker/lookup?jan='+encodeURIComponent(jan),5500);
+    if(mj&&mj.product){
+      const x=mj.product;
+      p=Object.assign({},p||{},{
+        id:(p&&p.id)||('jan-'+jan),
+        jan,
+        name:x.name||(p&&p.name)||'未登録商品',
+        brand:x.brand||(p&&p.brand)||'',
+        manufacturer:x.manufacturer||(p&&p.manufacturer)||'',
+        category:(p&&p.category)||inferCategory(x),
+        storePrice:p&&p.storePrice!=null?p.storePrice:null,
+        netPrice:p&&p.netPrice!=null?p.netPrice:null,
+        kcal:x.kcal!=null?x.kcal:(p&&p.kcal!=null?p.kcal:null),
+        kcalBasis:x.kcalBasis||(p&&p.kcalBasis)||'',
+        quantity:x.quantity||(p&&p.quantity)||'',
+        imageUrl:x.imageUrl||(p&&p.imageUrl)||'',
+        source:'maker',
+        sourceUrl:x.sourceUrl||mj.maker?.officialUrl||''
+      });
+    }else if(mj&&mj.maker){
+      p=Object.assign({},p||{},{
+        id:(p&&p.id)||('jan-'+jan),
+        jan,
+        name:(p&&p.name)||'未登録商品',
+        brand:(p&&p.brand)||mj.maker.brand||'',
+        manufacturer:(p&&p.manufacturer)||mj.maker.manufacturer||'',
+        category:(p&&p.category)||'snack',
+        storePrice:p&&p.storePrice!=null?p.storePrice:null,
+        netPrice:p&&p.netPrice!=null?p.netPrice:null,
+        kcal:p&&p.kcal!=null?p.kcal:null,
+        source:'manual',
+        maker:mj.maker
+      });
+    }
+  }
+
   if(!p)p={id:'jan-'+jan,jan:jan,name:'未登録商品',category:'snack',storePrice:null,netPrice:null,kcal:null,source:'manual'};
   p.category=p.category&&CAT[p.category]?p.category:inferCategory(p);
   if(p.source!=='demo'&&!/^JAN /.test(p.name))saveProduct(p);
@@ -556,7 +593,7 @@ async function lookupJan(raw){
 }
 async function doLookup(jan){
   const e=$('#result');
-  if(e)e.innerHTML='<p class="loading">西友と商品DBを調べています…</p>';
+  if(e)e.innerHTML='<p class="loading">西友・商品DB・メーカー公式を照会しています…</p>';
   S.last=await lookupJan(jan);
   if(S.last&&S.last.product&&navigator.vibrate)navigator.vibrate(45);
   if(e)e.innerHTML=scanResult(S.last);
