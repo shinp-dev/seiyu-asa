@@ -32,8 +32,7 @@ assert.ok(app.includes('data-stock-jan'),'official Seiyu stock lookup missing');
 assert.ok(app.includes('productQuery'),'product dictionary search missing');
 assert.ok(app.includes('alternativeScore'),'alternative ranking missing');
 assert.ok(app.includes('recDate'),'daily recommendation refresh missing');
-assert.ok(app.includes("prefix:'4903110'"),'Yamazaki maker prefix missing');
-assert.ok(app.includes("prefix:'4902410'"),'Fuji Pan maker prefix missing');
-assert.ok(app.includes("prefix:'4901820'"),'Pasco maker prefix missing');
+assert.ok(!app.includes('KNOWN_PRODUCTS'),'hardcoded product dictionary must not be bundled');
+assert.ok(!app.includes('MAKER_PREFIXES'),'hardcoded maker prefix table must not be bundled');
 
 console.log('smoke: OK');
