@@ -213,6 +213,19 @@ function recentBaseline(){
   };
 }
 
+function todayInsight(ps,price,cal,base){
+  const parts=[];
+  if(base&&Number.isFinite(base.kcal)&&cal<base.kcal-20)parts.push('いつもの朝より約'+Math.round(base.kcal-cal)+' kcal軽め');
+  const netSaved=ps.reduce((a,p)=>{
+    const d=priceDelta(p);
+    return a+(d!=null&&d>0?d:0);
+  },0);
+  if(netSaved>0)parts.push('ネット参考より合計'+yen(netSaved)+'安め');
+  const fresh=ps.filter(p=>p.source!=='demo'&&eatenCount(p.id)===0).length;
+  if(fresh>0)parts.push('初めての商品 '+fresh+'つ');
+  return parts.slice(0,2).join(' / ')||'好きな1品は固定して、残りだけ整えています';
+}
+
 function renderToday(){
   if(S.recDate!==today()){S.rec=null;S.lastRec={}}
   const r=S.rec||makeRec();
@@ -223,7 +236,8 @@ function renderToday(){
   const base=recentBaseline();
   const comparison=base
     ?'<p class="compare">最近'+base.days+'日平均より <b>'+signed(price-base.price,'円')+'</b> / <b>'+signed(cal-base.kcal,' kcal')+'</b></p>'
-    :'<p class="compare muted">食べた記録が2日分たまると、いつもの朝との差を表示します。</p>';
+    :'<p class="compare muted">3点とも食べた記録が2日分たまると、いつもの朝との差を表示します。</p>';
+  const insight=todayInsight(ps,price,cal,base);
 
   return '<section class="hero"><small>出勤前の西友だけ</small><h2>今日の3点、これでどう？</h2><p>お菓子 + 昼メシ + ペットボトル。夕方の買い物は混ぜない。</p></section>'+ (realCount<3?'<section class="onboarding card"><b>まずは自分の西友を育てる</b><p>実商品はまだ '+realCount+' 件。店頭でバーコードを読むほど、架空のDEMOではなく普段の商品から提案できるようになります。</p><button class="secondary small" data-jump="scan">1つスキャンする</button></section>':'')+
   '<section class="card focus"><b>今日はこれを固定</b><div class="pills">'+
@@ -231,7 +245,7 @@ function renderToday(){
     '</div><select id="fixed">'+categoryCandidates(S.focus,false).map(p=>'<option value="'+p.id+'" '+(p.id===S.fixed?'selected':'')+'>'+esc(p.name)+(p.source==='demo'?' (DEMO)':'')+'</option>').join('')+'</select></section>'+
   '<div class="title"><h3>今日のセット</h3><button id="reroll">別のセット</button></div>'+
   ps.map(p=>card(p)).join('')+
-  '<section class="summary"><small>合計</small><strong>'+yen(price)+' / '+kc(cal)+'</strong>'+comparison+
+  '<section class="summary"><small>合計</small><strong>'+yen(price)+' / '+kc(cal)+'</strong><div class="insight">'+esc(insight)+'</div>'+comparison+
     '<p>'+CAT[S.focus]+'は固定。NG商品と最近食べたものを避けながら、残りを提案しています。</p></section>'+
   '<button class="primary" id="accept">これでいく</button>'+
   '<button class="secondary" data-jump="scan">店頭の商品をスキャンして比べる</button>';
