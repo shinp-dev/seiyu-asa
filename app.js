@@ -2,6 +2,11 @@ const CAT={snack:'お菓子',lunch:'昼メシ',drink:'飲み物'};
 const ICON={snack:'🍫',lunch:'🍙',drink:'🥤'};
 const SOURCE={demo:'デモ',registered:'登録済み',seiyu:'西友ネット',openfoodfacts:'商品DB',maker:'メーカー公式',manual:'手入力'};
 const REASONS={expensive:'高い',small:'量が足りない',calorie:'カロリーの割に満足しない',taste:'味が好みじゃない',other:'その他'};
+const MAKER_OPTIONS=[
+  {id:'yamazaki',prefix:'4903110',label:'ヤマザキ'},
+  {id:'fujipan',prefix:'4902410',label:'フジパン'},
+  {id:'pasco',prefix:'4901820',label:'Pasco'}
+];
 const SEED=[
 {id:'s1',jan:'4900000000016',name:'クリームパン',category:'snack',storePrice:138,netPrice:158,kcal:356,source:'demo'},
 {id:'s2',jan:'4900000000023',name:'チョコバー',category:'snack',storePrice:48,netPrice:58,kcal:118,source:'demo'},
@@ -35,7 +40,8 @@ const S={
   productFilter:'all',
   productQuery:'',
   nameResults:[],
-  nameQuery:''
+  nameQuery:'',
+  makerOptIns:{}
 };
 
 const $=s=>document.querySelector(s);
@@ -80,8 +86,17 @@ function loadPrefs(){
   const p=read(K.prefs,{});
   if(p.focus&&CAT[p.focus])S.focus=p.focus;
   if(p.fixed)S.fixed=p.fixed;
+  S.makerOptIns=p.makerOptIns&&typeof p.makerOptIns==='object'?p.makerOptIns:{};
 }
-function savePrefs(){write(K.prefs,{focus:S.focus,fixed:S.fixed})}
+function savePrefs(){
+  const prev=read(K.prefs,{});
+  write(K.prefs,Object.assign({},prev,{focus:S.focus,fixed:S.fixed,makerOptIns:S.makerOptIns}));
+}
+function makerForJan(jan){return MAKER_OPTIONS.find(m=>jan.startsWith(m.prefix))||null}
+function makerOptedIn(jan){
+  const maker=makerForJan(jan);
+  return !!(maker&&S.makerOptIns&&S.makerOptIns[maker.id]);
+}
 
 function catalog(){
   const m=new Map(SEED.map(p=>[p.id,p]));
@@ -299,6 +314,14 @@ function accept(){
   render();
 }
 
+function renderOptions(){
+  return '<section class="hero"><small>外部問い合わせ</small><h2>メーカー公式を使う企業</h2><p>OFFが初期値です。ONにした企業だけ、JAN検索で西友・商品DBに見つからなかった時にメーカー公式へ問い合わせます。</p></section>'+
+  '<section class="card settings">'+
+    MAKER_OPTIONS.map(m=>'<label class="setting-row"><span><b>'+esc(m.label)+'</b><small>JANをメーカー公式の検索へ送信</small></span><input type="checkbox" data-maker-optin="'+esc(m.id)+'" '+(S.makerOptIns[m.id]?'checked':'')+'></label>').join('')+
+    '<p class="mini-note privacy-note">OFFの企業には問い合わせません。設定はこの端末内にだけ保存します。</p>'+
+  '</section>';
+}
+
 function renderScan(){
   return '<section class="hero"><small>店頭で迷ったら</small><h2>バーコードで判定</h2><p>JAN/EANを読んで、西友ネット参考価格・店頭価格・カロリー・過去の後悔をまとめて確認。</p></section>'+
   '<section class="card scan"><div class="video"><video id="video" playsinline muted></video><i></i></div>'+
@@ -359,7 +382,7 @@ function scanResult(r){
     (p.sourceUrl?'<a class="source-link" target="_blank" rel="noreferrer" href="'+esc(p.sourceUrl)+'">情報元を確認 →</a>':'')+
     (p.maker&&p.maker.lookupUrl?'<a class="source-link" target="_blank" rel="noreferrer" href="'+esc(p.maker.lookupUrl)+'">'+esc(p.maker.brand)+'公式で確認 →</a>':'')+
     (p.jan?'<button class="stock-link" data-stock-jan="'+esc(p.jan)+'">西友の店舗在庫を確認</button>':'')+
-    (p.source==='manual'?'<p class="hint">このJANは外部商品DBで特定できませんでした。商品名と店頭価格を一度保存すれば、次回から端末内で即座に呼び出せます。</p>':'')+
+    (p.source==='manual'?'<p class="hint">'+(p.makerOptInAvailable?esc(p.makerOptInAvailable.label)+'公式への問い合わせは設定でOFFです。ONにすると次回から公式も照会します。':'このJANは外部商品DBで特定できませんでした。商品名と店頭価格を一度保存すれば、次回から端末内で即座に呼び出せます。')+'</p>':'')+
     registerForm(p)+
     '<button class="secondary" data-use-scan="1">今日の3点でこの商品を優先</button>'+
   '</section>';
@@ -548,7 +571,7 @@ async function lookupJan(raw){
     }
   }
 
-  if(!p||!p.name||p.name==='未登録商品'){
+  if((!p||!p.name||p.name==='未登録商品')&&makerOptedIn(jan)){
     const mj=await fetchJson('/api/maker/lookup?jan='+encodeURIComponent(jan),5500);
     if(mj&&mj.product){
       const x=mj.product;
@@ -585,7 +608,10 @@ async function lookupJan(raw){
     }
   }
 
-  if(!p)p={id:'jan-'+jan,jan:jan,name:'未登録商品',category:'snack',storePrice:null,netPrice:null,kcal:null,source:'manual'};
+  if(!p){
+    const maker=makerForJan(jan);
+    p={id:'jan-'+jan,jan:jan,name:'未登録商品',category:'snack',storePrice:null,netPrice:null,kcal:null,source:'manual',makerOptInAvailable:maker&&!S.makerOptIns[maker.id]?maker:null};
+  }
   p.category=p.category&&CAT[p.category]?p.category:inferCategory(p);
   if(p.source!=='demo'&&p.source!=='manual'&&!/^JAN /.test(p.name))saveProduct(p);
 
@@ -892,12 +918,19 @@ async function importData(file){
 
 function render(){
   stopScan();
-  $('#app').innerHTML=S.route==='today'?renderToday():S.route==='scan'?renderScan():S.route==='history'?renderHistory():renderProducts();
+  $('#app').innerHTML=S.route==='today'?renderToday():S.route==='scan'?renderScan():S.route==='history'?renderHistory():S.route==='options'?renderOptions():renderProducts();
   $$('.nav-item').forEach(b=>b.classList.toggle('active',b.dataset.route===S.route));
   bind();
 }
 function bind(){
-  $$('.nav-item').forEach(b=>b.onclick=()=>{S.route=b.dataset.route;S.reasonFor=null;render()});
+  const settings=$('#settings');
+  if(settings)settings.onclick=()=>{S.route='options';S.reasonFor=null;render()};
+  $('[data-maker-optin]').forEach(x=>x.onchange=()=>{
+    S.makerOptIns[x.dataset.makerOptin]=!!x.checked;
+    savePrefs();
+    toast((MAKER_OPTIONS.find(m=>m.id===x.dataset.makerOptin)||{label:'メーカー'}).label+'公式問い合わせを'+(x.checked?'ON':'OFF')+'にしました');
+  });
+  $('.nav-item').forEach(b=>b.onclick=()=>{S.route=b.dataset.route;S.reasonFor=null;render()});
   $$('[data-jump]').forEach(b=>b.onclick=()=>{S.route=b.dataset.jump;render()});
   $$('[data-focus]').forEach(b=>b.onclick=()=>{
     S.focus=b.dataset.focus;
