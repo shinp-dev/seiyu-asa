@@ -33,6 +33,7 @@ const S={
   detector:null,
   reasonFor:null,
   productFilter:'all',
+  productQuery:'',
   nameResults:[],
   nameQuery:''
 };
@@ -400,12 +401,28 @@ function alternativeKeyword(p){
 function alternativeScore(x,current){
   let s=0;
   const ck=Number(current.kcal),xk=Number(x.kcal);
-  if(Number.isFinite(ck)&&Number.isFinite(xk))s+=(ck-xk)/10;
   const cp=Number(current.storePrice!=null?current.storePrice:current.netPrice),xp=Number(x.netPrice);
-  if(Number.isFinite(cp)&&Number.isFinite(xp))s+=(cp-xp)/20;
+  const regret=lastReason(current.id);
+  const reason=regret&&regret.reason||'';
+
+  if(Number.isFinite(ck)&&Number.isFinite(xk)){
+    const kcalGain=ck-xk;
+    s+=kcalGain/10;
+    if(reason===REASONS.calorie)s+=kcalGain/5;
+  }
+  if(Number.isFinite(cp)&&Number.isFinite(xp)){
+    const priceGain=cp-xp;
+    s+=priceGain/20;
+    if(reason===REASONS.expensive)s+=priceGain/8;
+  }
+  if(reason===REASONS.small && x.quantity && current.quantity){
+    const xv=parseFloat(String(x.quantity)),cv=parseFloat(String(current.quantity));
+    if(Number.isFinite(xv)&&Number.isFinite(cv)&&xv>cv)s+=8;
+  }
   if(x.kcal==null)s-=8;
   return s;
 }
+
 async function findSeiyuAlternatives(){
   if(!S.last||!S.last.product)return;
   const p=S.last.product;
@@ -712,14 +729,18 @@ function renderProducts(){
   let ps=catalog();
   if(S.productFilter==='ng')ps=ps.filter(p=>ng(p.id));
   if(S.productFilter==='favorite')ps=ps.filter(p=>{const x=st(p.id);return x.selected>0&&x.good>=x.meh+x.ng});
+  const q=S.productQuery.trim().toLowerCase();
+  if(q)ps=ps.filter(p=>((p.name||'')+' '+(p.jan||'')+' '+CAT[p.category]).toLowerCase().includes(q));
   ps.sort((a,b)=>(ng(b.id)?1:0)-(ng(a.id)?1:0)||eatenCount(b.id)-eatenCount(a.id));
 
   return '<section class="hero"><small>自分専用の西友DB</small><h2>商品辞書</h2><p>選ばれ率・価格差・後悔理由を、使うほど自分向けに育てます。</p></section>'+
+    '<div class="dictionary-search"><input id="product-q" value="'+esc(S.productQuery)+'" placeholder="商品名・JANで探す"><button id="product-q-clear" '+(S.productQuery?'':'disabled')+'>クリア</button></div>'+
     '<div class="pills filters">'+
       '<button class="pill '+(S.productFilter==='all'?'on':'')+'" data-filter="all">全部</button>'+
       '<button class="pill '+(S.productFilter==='favorite'?'on':'')+'" data-filter="favorite">鉄板</button>'+
       '<button class="pill '+(S.productFilter==='ng'?'on':'')+'" data-filter="ng">NG</button>'+
     '</div>'+
+    '<p class="result-count">'+ps.length+'件</p>'+
     (ps.length?ps.map(productDetailCard).join(''):'<p class="empty">該当する商品はありません。</p>')+
     '<section class="card backup"><h3>端末データ</h3><p>ログインなしなので、必要ならJSONでバックアップできます。</p>'+
       '<div class="row"><button id="export" class="secondary small">書き出す</button><label class="import-label">読み込む<input id="import" type="file" accept="application/json"></label><button id="reset-data" class="danger-outline small">初期化</button></div></section>';
@@ -900,6 +921,9 @@ function bind(){
     render();
   });
   $$('[data-filter]').forEach(b=>b.onclick=()=>{S.productFilter=b.dataset.filter;render()});
+  const pq=$('#product-q'),pqc=$('#product-q-clear');
+  if(pq)pq.oninput=()=>{S.productQuery=pq.value;clearTimeout(pq._t);pq._t=setTimeout(render,180)};
+  if(pqc)pqc.onclick=()=>{S.productQuery='';render()};
   $$('[data-rescan]').forEach(b=>b.onclick=()=>{S.route='scan';S.last=null;render();doLookup(b.dataset.rescan)});
   $$('[data-lookup-jan]').forEach(b=>b.onclick=()=>doLookup(b.dataset.lookupJan));
   $$('[data-use-product]').forEach(b=>b.onclick=()=>{
