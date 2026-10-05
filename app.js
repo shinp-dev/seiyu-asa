@@ -339,6 +339,54 @@ function registerForm(p){
     '<button class="primary small">この内容で保存</button></form>';
 }
 function seiyuUrl(q){return 'https://netsuper.rakuten.co.jp/seiyu/search/?keyword='+encodeURIComponent(q||'')}
+function alternativeKeyword(p){
+  const n=p.name||'';
+  if(/チョコ|ショコラ/.test(n))return'チョコ';
+  if(/ポテト|スナック|チップ/.test(n))return'スナック菓子';
+  if(/クッキー|ビスケット/.test(n))return'クッキー';
+  if(/アイス/.test(n))return'アイス';
+  if(/パン|クロワッサン|デニッシュ/.test(n))return'パン';
+  if(/おにぎり/.test(n))return'おにぎり';
+  if(/サンド/.test(n))return'サンドイッチ';
+  if(/弁当|丼/.test(n))return'弁当';
+  if(/コーラ|炭酸/.test(n))return'炭酸飲料';
+  if(/茶|ティー/.test(n))return'お茶';
+  if(/コーヒー|ラテ/.test(n))return'コーヒー';
+  return p.category==='drink'?'飲料':p.category==='lunch'?'お弁当':'お菓子';
+}
+function alternativeScore(x,current){
+  let s=0;
+  const ck=Number(current.kcal),xk=Number(x.kcal);
+  if(Number.isFinite(ck)&&Number.isFinite(xk))s+=(ck-xk)/10;
+  const cp=Number(current.storePrice!=null?current.storePrice:current.netPrice),xp=Number(x.netPrice);
+  if(Number.isFinite(cp)&&Number.isFinite(xp))s+=(cp-xp)/20;
+  if(x.kcal==null)s-=8;
+  return s;
+}
+async function findSeiyuAlternatives(){
+  if(!S.last||!S.last.product)return;
+  const p=S.last.product;
+  const button=$('#find-alts');
+  if(button){button.disabled=true;button.textContent='西友で探しています…'}
+  const hits=await searchSeiyu(alternativeKeyword(p));
+  const targets=hits.filter(x=>x.jan&&x.jan!==p.jan).slice(0,6);
+  const detail=await Promise.all(targets.map(async h=>{
+    const j=await fetchJson('/api/seiyu/product?jan='+encodeURIComponent(h.jan),5000);
+    const x=j&&j.item;
+    if(!x)return null;
+    return{
+      id:'jan-'+x.jan,jan:x.jan,name:x.name||h.name,category:p.category,
+      storePrice:null,netPrice:x.taxIncludedPrice||x.price||h.taxIncludedPrice||h.price||null,
+      kcal:x.kcal,kcalBasis:x.kcalBasis||'',quantity:x.size||h.size||'',imageUrl:'',
+      source:'seiyu',sourceUrl:x.sourceUrl||h.url
+    };
+  }));
+  S.last.alternatives=detail.filter(Boolean).sort((a,b)=>alternativeScore(b,p)-alternativeScore(a,p)).slice(0,3);
+  const out=$('#result');
+  if(out)out.innerHTML=scanResult(S.last);
+  bind();
+  if(!S.last.alternatives.length)toast('比較できる西友候補が見つかりませんでした');
+}
 async function fetchJson(url,timeout){
   const c=new AbortController();
   const t=setTimeout(()=>c.abort(),timeout||5000);
