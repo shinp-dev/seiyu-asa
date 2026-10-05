@@ -26,6 +26,7 @@ const S={
   focus:'drink',
   fixed:'d1',
   rec:null,
+  recDate:null,
   last:null,
   lastRec:{},
   stream:null,
@@ -152,6 +153,7 @@ function makeRec(){
     }
   });
   S.rec=r;
+  S.recDate=today();
   return r;
 }
 
@@ -194,14 +196,15 @@ function recentBaseline(){
   rows.forEach(h=>{
     (by[h.date]||(by[h.date]=[])).push(h);
   });
-  const days=Object.keys(by).sort().reverse().slice(0,14).map(k=>{
+  const days=Object.keys(by).sort().reverse().slice(0,30).map(k=>{
     const xs=by[k];
     return {
       date:k,
+      categories:new Set(xs.map(x=>x.category)).size,
       price:xs.reduce((a,x)=>a+(Number(x.price)||0),0),
       kcal:xs.reduce((a,x)=>a+(Number(x.kcal)||0),0)
     };
-  }).filter(x=>x.price||x.kcal);
+  }).filter(x=>x.categories>=3).slice(0,14);
   if(days.length<2)return null;
   return {
     days:days.length,
@@ -211,6 +214,7 @@ function recentBaseline(){
 }
 
 function renderToday(){
+  if(S.recDate!==today()){S.rec=null;S.lastRec={}}
   const r=S.rec||makeRec();
   const realCount=catalog().filter(p=>p.source!=='demo').length;
   const ps=Object.values(r);
