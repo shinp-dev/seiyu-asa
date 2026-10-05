@@ -106,3 +106,9 @@
 .name-hit small{color:var(--muted);font-size:9px;margin-top:2px}
 .name-hit strong{white-space:nowrap;font-size:11px}
 .name-hit button{margin-top:6px;border:0;background:none;color:var(--brand);font-size:9px;font-weight:900;padding:0}
+
+.dictionary-search{display:grid;grid-template-columns:1fr auto;gap:7px;margin:0 0 10px}
+.dictionary-search input{min-width:0;border:1px solid var(--line);border-radius:12px;padding:10px 11px;background:#fff;font:inherit}
+.dictionary-search button{border:0;border-radius:12px;padding:0 11px;background:var(--soft);color:var(--brand);font-size:10px;font-weight:900}
+.dictionary-search button:disabled{opacity:.35}
+.result-count{margin:-4px 3px 8px;color:var(--muted);font-size:9px;text-align:right}
