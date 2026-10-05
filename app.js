@@ -713,7 +713,7 @@ function productDetailCard(p){
   const x=st(p.id),rate=x.proposed?Math.round(x.selected/x.proposed*100):0;
   const reason=lastReason(p.id);
   const d=priceDelta(p);
-  return '<article class="card dictionary '+(ng(p.id)?'is-ng':'')+'">'+
+  return '<article class="card dictionary '+(ng(p.id)?'is-ng':'')+'" data-product-search="'+esc(((p.name||'')+' '+(p.jan||'')+' '+CAT[p.category]).toLowerCase())+'">'+
     '<div class="dict-head"><div><span class="badge">'+CAT[p.category]+'</span>'+
       (p.source==='demo'?'<span class="badge demo">DEMO</span>':'')+
       (ng(p.id)?'<span class="badge bad">NG</span>':'')+
@@ -740,7 +740,7 @@ function renderProducts(){
       '<button class="pill '+(S.productFilter==='favorite'?'on':'')+'" data-filter="favorite">鉄板</button>'+
       '<button class="pill '+(S.productFilter==='ng'?'on':'')+'" data-filter="ng">NG</button>'+
     '</div>'+
-    '<p class="result-count">'+ps.length+'件</p>'+
+    '<p class="result-count" id="product-count">'+ps.length+'件</p>'+
     (ps.length?ps.map(productDetailCard).join(''):'<p class="empty">該当する商品はありません。</p>')+
     '<section class="card backup"><h3>端末データ</h3><p>ログインなしなので、必要ならJSONでバックアップできます。</p>'+
       '<div class="row"><button id="export" class="secondary small">書き出す</button><label class="import-label">読み込む<input id="import" type="file" accept="application/json"></label><button id="reset-data" class="danger-outline small">初期化</button></div></section>';
@@ -922,8 +922,22 @@ function bind(){
   });
   $$('[data-filter]').forEach(b=>b.onclick=()=>{S.productFilter=b.dataset.filter;render()});
   const pq=$('#product-q'),pqc=$('#product-q-clear');
-  if(pq)pq.oninput=()=>{S.productQuery=pq.value;clearTimeout(pq._t);pq._t=setTimeout(render,180)};
-  if(pqc)pqc.onclick=()=>{S.productQuery='';render()};
+  const applyProductQuery=()=>{
+    if(!pq)return;
+    S.productQuery=pq.value;
+    const q=S.productQuery.trim().toLowerCase();
+    let visible=0;
+    $$('.dictionary[data-product-search]').forEach(card=>{
+      const show=!q||(card.dataset.productSearch||'').includes(q);
+      card.hidden=!show;
+      if(show)visible++;
+    });
+    const count=$('#product-count');
+    if(count)count.textContent=visible+'件';
+    if(pqc)pqc.disabled=!S.productQuery;
+  };
+  if(pq)pq.oninput=applyProductQuery;
+  if(pqc)pqc.onclick=()=>{S.productQuery='';pq.value='';applyProductQuery();pq.focus()};
   $$('[data-rescan]').forEach(b=>b.onclick=()=>{S.route='scan';S.last=null;render();doLookup(b.dataset.rescan)});
   $$('[data-lookup-jan]').forEach(b=>b.onclick=()=>doLookup(b.dataset.lookupJan));
   $$('[data-use-product]').forEach(b=>b.onclick=()=>{
