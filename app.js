@@ -207,6 +207,7 @@ function recentBaseline(){
 
 function renderToday(){
   const r=S.rec||makeRec();
+  const realCount=catalog().filter(p=>p.source!=='demo').length;
   const ps=Object.values(r);
   const price=ps.reduce((a,p)=>a+(Number(p.storePrice)||0),0);
   const cal=ps.reduce((a,p)=>a+(Number(p.kcal)||0),0);
@@ -215,7 +216,7 @@ function renderToday(){
     ?'<p class="compare">最近'+base.days+'日平均より <b>'+signed(price-base.price,'円')+'</b> / <b>'+signed(cal-base.kcal,' kcal')+'</b></p>'
     :'<p class="compare muted">食べた記録が2日分たまると、いつもの朝との差を表示します。</p>';
 
-  return '<section class="hero"><small>出勤前の西友だけ</small><h2>今日の3点、これでどう？</h2><p>お菓子 + 昼メシ + ペットボトル。夕方の買い物は混ぜない。</p></section>'+
+  return '<section class="hero"><small>出勤前の西友だけ</small><h2>今日の3点、これでどう？</h2><p>お菓子 + 昼メシ + ペットボトル。夕方の買い物は混ぜない。</p></section>'+ (realCount<3?'<section class="onboarding card"><b>まずは自分の西友を育てる</b><p>実商品はまだ '+realCount+' 件。店頭でバーコードを読むほど、架空のDEMOではなく普段の商品から提案できるようになります。</p><button class="secondary small" data-jump="scan">1つスキャンする</button></section>':'')+
   '<section class="card focus"><b>今日はこれを固定</b><div class="pills">'+
     Object.keys(CAT).map(c=>'<button data-focus="'+c+'" class="pill '+(S.focus===c?'on':'')+'">'+CAT[c]+'</button>').join('')+
     '</div><select id="fixed">'+categoryCandidates(S.focus,false).map(p=>'<option value="'+p.id+'" '+(p.id===S.fixed?'selected':'')+'>'+esc(p.name)+(p.source==='demo'?' (DEMO)':'')+'</option>').join('')+'</select></section>'+
@@ -248,6 +249,7 @@ function accept(){
       name:p.name,
       category:p.category,
       price:p.storePrice,
+      netPrice:p.netPrice,
       kcal:p.kcal,
       status:'planned',
       feedback:null,
@@ -294,7 +296,7 @@ function scanResult(r){
       '</div></div>'+
     '<div class="metrics"><div><small>店頭</small><b>'+yen(p.storePrice)+'</b></div>'+
     '<div><small>ネット参考</small><b>'+yen(p.netPrice)+'</b></div>'+
-    '<div><small>kcal</small><b>'+kc(p.kcal)+'</b></div></div>'+
+    '<div><small>kcal</small><b>'+kc(p.kcal)+'</b>'+(p.kcalBasis?'<em>'+esc(p.kcalBasis)+'</em>':'')+'</div></div>'+
     (d!==null?'<p class="callout">'+(d>=0?'店頭のほうが '+yen(d)+' 安い':'ネット参考のほうが '+yen(Math.abs(d))+' 安い')+'</p>':'<p class="hint">店頭価格を登録するとネット参考価格との差額を出せます。</p>')+
     (p.sourceUrl?'<a class="source-link" target="_blank" rel="noreferrer" href="'+esc(p.sourceUrl)+'">情報元を確認 →</a>':'')+
     registerForm(p)+
@@ -367,6 +369,7 @@ async function lookupJan(raw){
       storePrice:p&&p.storePrice!=null?p.storePrice:null,
       netPrice:sj.item.taxIncludedPrice||sj.item.price||(p&&p.netPrice)||null,
       kcal:sj.item.kcal!=null?sj.item.kcal:(p&&p.kcal!=null?p.kcal:null),
+      kcalBasis:sj.item.kcalBasis||(p&&p.kcalBasis)||'',
       quantity:sj.item.size||(p&&p.quantity)||'',
       imageUrl:(p&&p.imageUrl)||'',
       source:'seiyu',
@@ -388,6 +391,7 @@ async function lookupJan(raw){
           quantity:x.quantity||'',
           servingSize:x.serving_size||'',
           kcal:Number.isFinite(s)?s:(Number.isFinite(h)?h:null),
+          kcalBasis:Number.isFinite(s)?(x.serving_size||'1食あたり'):(Number.isFinite(h)?'100gあたり':''),
           imageUrl:x.image_front_small_url||'',
           categories:Array.isArray(x.categories_tags)?x.categories_tags:[],
           source:'openfoodfacts',
@@ -402,6 +406,7 @@ async function lookupJan(raw){
       p.jan=jan;
       if((!p.name||/^JAN /.test(p.name))&&x.name)p.name=x.name;
       if(p.kcal==null&&x.kcal!=null)p.kcal=x.kcal;
+      if(!p.kcalBasis&&x.kcalBasis)p.kcalBasis=x.kcalBasis;
       if(!p.quantity&&x.quantity)p.quantity=x.quantity;
       if(!p.imageUrl&&x.imageUrl)p.imageUrl=x.imageUrl;
       if(!exactSeiyu){
@@ -473,7 +478,11 @@ function monthSummary(){
   const price=rows.reduce((a,h)=>a+(Number(h.price)||0),0);
   const kcal=rows.reduce((a,h)=>a+(Number(h.kcal)||0),0);
   const regrets=history().filter(h=>h.date&&h.date.startsWith(prefix)&&['meh','ng'].includes(h.feedback)).length;
-  return{days,price,kcal,regrets};
+  const netSaved=rows.reduce((a,h)=>{
+    const n=Number(h.netPrice),s=Number(h.price);
+    return a+(Number.isFinite(n)&&Number.isFinite(s)?Math.max(0,n-s):0);
+  },0);
+  return{days,price,kcal,regrets,netSaved};
 }
 function historyItem(h){
   const active=S.reasonFor===h.id&&['meh','ng'].includes(h.feedback);
@@ -483,7 +492,7 @@ function historyItem(h){
      '<button data-fb="ng" data-id="'+h.id+'" class="'+(h.feedback==='ng'?'danger':'')+'">もう買わない</button>'
     :'';
   return '<article class="card hist">'+
-    '<div class="hist-main"><div><b>'+esc(h.name)+'</b><small>'+CAT[h.category]+' / '+yen(h.price)+' / '+kc(h.kcal)+'</small></div>'+
+    '<div class="hist-main"><div><b>'+esc(h.name)+'</b><small>'+CAT[h.category]+' / '+yen(h.price)+' / '+kc(h.kcal)+(h.netPrice!=null&&h.price!=null&&Number(h.netPrice)>Number(h.price)?' / ネットより'+yen(Number(h.netPrice)-Number(h.price))+'安い':'')+'</small></div>'+
     '<button class="remove" data-remove="'+h.id+'" aria-label="履歴から削除">×</button></div>'+
     '<div class="actions">'+
       (h.status==='planned'?'<button data-eat="'+h.id+'">食べた</button>':'<span>食べた</span>')+
@@ -499,7 +508,7 @@ function renderHistory(){
   const all=history().slice().sort((a,b)=>(b.date||'').localeCompare(a.date||'')||String(b.createdAt||b.id).localeCompare(String(a.createdAt||a.id)));
   const m=monthSummary();
   let html='<section class="hero"><small>後悔も忘れない</small><h2>食べたもの</h2><p>「もう買わない」と理由を残すと、次の朝と店頭スキャンで思い出させます。</p></section>'+
-    '<section class="month-strip"><div><small>今月 食べた朝</small><b>'+m.days+'日</b></div><div><small>記録金額</small><b>'+yen(m.price)+'</b></div><div><small>記録kcal</small><b>'+kc(m.kcal)+'</b></div><div><small>後悔</small><b>'+m.regrets+'件</b></div></section>';
+    '<section class="month-strip"><div><small>今月 食べた朝</small><b>'+m.days+'日</b></div><div><small>記録金額</small><b>'+yen(m.price)+'</b></div><div><small>記録kcal</small><b>'+kc(m.kcal)+'</b></div><div><small>ネットより節約</small><b>'+yen(m.netSaved)+'</b></div><div><small>後悔</small><b>'+m.regrets+'件</b></div></section>';
   if(!all.length)return html+'<p class="empty">まだ履歴がありません。</p>';
 
   const groups={};
@@ -674,6 +683,7 @@ function bind(){
       kcal:num(d.get('kcal')),
       quantity:existing.quantity||'',
       imageUrl:existing.imageUrl||'',
+      kcalBasis:existing.kcalBasis||'',
       source:existing.source==='seiyu'?'seiyu':'registered',
       sourceUrl:existing.sourceUrl||''
     };
