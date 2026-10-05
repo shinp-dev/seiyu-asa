@@ -74,3 +74,15 @@
 .day-head>div span{display:block}
 .day-head>button{border:0;background:var(--soft);color:var(--brand);border-radius:999px;padding:6px 9px;font-size:9px;font-weight:900}
 .danger-outline{border:1px solid #efbdc2;background:#fff;color:var(--bad);border-radius:14px;padding:9px 12px;font-size:11px;font-weight:900}
+
+.whatif{padding:15px;margin:0 0 18px;background:linear-gradient(145deg,#fffdf7,#f3faf7)}
+.whatif>p{margin:7px 0;color:#596861;font-size:11px}
+.whatif-head{display:flex;justify-content:space-between;gap:12px;align-items:end}
+.whatif-head small{display:block;color:var(--muted);font-size:9px}
+.whatif-head strong{display:block;margin-top:2px;font-size:18px}
+.whatif-kcal{font-size:20px;font-weight:900;color:var(--brand);white-space:nowrap}
+.disclaimer{display:block;color:#8a9691;font-size:8px;line-height:1.5}
+.decision-list{margin-top:10px;border-top:1px solid var(--line);padding-top:7px}
+.decision-list div{display:flex;justify-content:space-between;gap:10px;padding:5px 0;font-size:9px}
+.decision-list span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#52605a}
+.decision-list b{white-space:nowrap}
