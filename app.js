@@ -166,6 +166,10 @@ function card(p,opts){
   const rate=x.proposed?Math.round(x.selected/x.proposed*100):0;
   const d=priceDelta(p);
   const reason=lastReason(p.id);
+  const priceLine=p.storePrice!=null
+    ?'店頭 '+yen(p.storePrice)+(p.netPrice!=null?' / ネット '+yen(p.netPrice)+(d!==null?' ('+(d>=0?'+':'')+Math.round(d)+'円)':''):'')
+    :(p.netPrice!=null?'ネット参考 '+yen(p.netPrice)+' / 店頭未登録':'価格未登録');
+  const mainPrice=opts.preferNet&&p.storePrice==null?p.netPrice:p.storePrice;
   return '<article class="product card '+(ng(p.id)?'is-ng':'')+'">'+
     '<div class="ico">'+ICON[p.category]+'</div>'+
     '<div class="grow"><div>'+
@@ -174,10 +178,10 @@ function card(p,opts){
       (ng(p.id)?'<span class="badge bad">NG</span>':'')+
     '</div>'+
     '<b>'+esc(p.name)+'</b>'+
-    '<small>店頭 '+yen(p.storePrice)+(d!==null?' / ネット '+yen(p.netPrice)+' ('+(d>=0?'+':'')+Math.round(d)+'円)':'')+'</small>'+
+    '<small>'+priceLine+'</small>'+
     '<small>選ばれ率 '+rate+'% / 食べた '+eatenCount(p.id)+'回'+(reason?' / 前回: '+esc(reason.reason):'')+'</small>'+
     '</div>'+
-    '<div class="num"><b>'+yen(p.storePrice)+'</b><small>'+kc(p.kcal)+'</small></div>'+
+    '<div class="num"><b>'+yen(mainPrice)+'</b><small>'+kc(p.kcal)+'</small></div>'+
     (opts.actions&&ng(p.id)?'<button class="tiny-link" data-unng="'+esc(p.id)+'">NG解除</button>':'')+
     (opts.choose?'<button class="tiny-link choose" data-use-product="'+esc(p.id)+'">今日これを優先</button>':'')+
   '</article>';
