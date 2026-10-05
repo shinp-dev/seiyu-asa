@@ -925,12 +925,12 @@ function render(){
 function bind(){
   const settings=$('#settings');
   if(settings)settings.onclick=()=>{S.route='options';S.reasonFor=null;render()};
-  $('[data-maker-optin]').forEach(x=>x.onchange=()=>{
+  $$('[data-maker-optin]').forEach(x=>x.onchange=()=>{
     S.makerOptIns[x.dataset.makerOptin]=!!x.checked;
     savePrefs();
     toast((MAKER_OPTIONS.find(m=>m.id===x.dataset.makerOptin)||{label:'メーカー'}).label+'公式問い合わせを'+(x.checked?'ON':'OFF')+'にしました');
   });
-  $('.nav-item').forEach(b=>b.onclick=()=>{S.route=b.dataset.route;S.reasonFor=null;render()});
+  $$('.nav-item').forEach(b=>b.onclick=()=>{S.route=b.dataset.route;S.reasonFor=null;render()});
   $$('[data-jump]').forEach(b=>b.onclick=()=>{S.route=b.dataset.jump;render()});
   $$('[data-focus]').forEach(b=>b.onclick=()=>{
     S.focus=b.dataset.focus;
