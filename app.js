@@ -1,6 +1,6 @@
 const CAT={snack:'お菓子',lunch:'昼メシ',drink:'飲み物'};
 const ICON={snack:'🍫',lunch:'🍙',drink:'🥤'};
-const SOURCE={demo:'デモ',registered:'登録済み',seiyu:'西友ネット',openfoodfacts:'商品DB',manual:'手入力'};
+const SOURCE={demo:'デモ',registered:'登録済み',seiyu:'西友ネット',openfoodfacts:'商品DB',maker:'メーカー公式',manual:'手入力'};
 const REASONS={expensive:'高い',small:'量が足りない',calorie:'カロリーの割に満足しない',taste:'味が好みじゃない',other:'その他'};
 const SEED=[
 {id:'s1',jan:'4900000000016',name:'クリームパン',category:'snack',storePrice:138,netPrice:158,kcal:356,source:'demo'},
@@ -12,6 +12,25 @@ const SEED=[
 {id:'d1',jan:'4900000000201',name:'コーラ 500ml',category:'drink',storePrice:108,netPrice:128,kcal:225,source:'demo'},
 {id:'d2',jan:'4900000000218',name:'無糖茶 600ml',category:'drink',storePrice:88,netPrice:98,kcal:0,source:'demo'},
 {id:'d3',jan:'4900000000225',name:'炭酸水 500ml',category:'drink',storePrice:79,netPrice:89,kcal:0,source:'demo'}];
+
+const KNOWN_PRODUCTS={
+  '4903110797586':{
+    id:'jan-4903110797586',
+    jan:'4903110797586',
+    name:'高級焼きいもあんぱん',
+    brand:'ヤマザキ',
+    manufacturer:'山崎製パン',
+    category:'snack',
+    storePrice:null,
+    netPrice:null,
+    kcal:379,
+    kcalBasis:'1個あたり',
+    quantity:'1個',
+    imageUrl:'',
+    source:'maker',
+    sourceUrl:'https://www.yamazakipan.co.jp/newitem/'
+  }
+};
 
 const K={
   catalog:'sa.catalog',
@@ -348,6 +367,7 @@ function scanResult(r){
       (p.imageUrl?'<img src="'+esc(p.imageUrl)+'" alt="" loading="lazy">':'')+
       '<div><span class="badge">JAN '+esc(p.jan)+'</span>'+
       (sourceLabel(p)?'<span class="badge source">'+esc(sourceLabel(p))+'</span>':'')+
+      (p.source==='maker'?'<span class="badge source">西友店頭とネット掲載は別</span>':'')+
       '<h3>'+esc(p.name)+'</h3>'+
       (p.quantity?'<small>'+esc(p.quantity)+'</small>':'')+
       '</div></div>'+
@@ -357,6 +377,7 @@ function scanResult(r){
     (d!==null?'<p class="callout">'+(d>=0?'店頭のほうが '+yen(d)+' 安い':'ネット参考のほうが '+yen(Math.abs(d))+' 安い')+'</p>':'<p class="hint">店頭価格を登録するとネット参考価格との差額を出せます。</p>')+
     (p.sourceUrl?'<a class="source-link" target="_blank" rel="noreferrer" href="'+esc(p.sourceUrl)+'">情報元を確認 →</a>':'')+
     (p.jan?'<button class="stock-link" data-stock-jan="'+esc(p.jan)+'">西友の店舗在庫を確認</button>':'')+
+    (p.source==='maker'?'<p class="hint">メーカー公式で商品を特定しています。西友の店頭取扱いは、ネットスーパー掲載とは別に扱います。</p>':'')+
     registerForm(p)+
     '<button class="secondary" data-use-scan="1">今日の3点でこの商品を優先</button>'+
   '</section>';
@@ -482,7 +503,7 @@ async function lookupJan(raw){
   const jan=normalizeJan(raw);
   if(!validJan(jan))return{error:'JAN/EANコードを確認してください（8〜14桁）'};
 
-  let p=catalog().find(x=>x.jan===jan)||null;
+  let p=catalog().find(x=>x.jan===jan)||KNOWN_PRODUCTS[jan]||null;
   let exactSeiyu=null;
 
   const sj=await fetchJson('/api/seiyu/product?jan='+encodeURIComponent(jan),5500);
