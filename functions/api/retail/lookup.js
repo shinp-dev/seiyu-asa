@@ -101,7 +101,9 @@ async function getHtml(url){
     const r=await fetch(url,{
       headers:{
         accept:'text/html,application/xhtml+xml',
-        'user-agent':'seiyu-asa/0.5 (+https://github.com/shinp-dev/seiyu-asa)'
+        'accept-language':'ja,en-US;q=0.9,en;q=0.8',
+        'cache-control':'no-cache',
+        'user-agent':'Mozilla/5.0 (Linux; Android 15; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Mobile Safari/537.36'
       },
       cf:{cacheTtl:21600,cacheEverything:true}
     });
