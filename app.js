@@ -110,9 +110,25 @@ function retailOptedInIds(){
   return RETAIL_OPTIONS.filter(x=>S.retailOptIns&&S.retailOptIns[x.id]).map(x=>x.id);
 }
 
+function sanitizeCachedProduct(p){
+  if(!p)return p;
+  const badMakerName=p.source==='maker'&&/サイト内検索|検索結果|site\s*search/i.test(p.name||'');
+  if(!badMakerName)return p;
+  return Object.assign({},p,{
+    name:'未登録商品',
+    brand:'',
+    manufacturer:'',
+    kcal:null,
+    kcalBasis:'',
+    quantity:'',
+    imageUrl:'',
+    source:'manual',
+    sourceUrl:''
+  });
+}
 function catalog(){
   const m=new Map(SEED.map(p=>[p.id,p]));
-  read(K.catalog,[]).forEach(p=>m.set(p.id,p));
+  read(K.catalog,[]).forEach(p=>m.set(p.id,sanitizeCachedProduct(p)));
   return Array.from(m.values());
 }
 function saveProduct(p){
@@ -539,7 +555,7 @@ async function lookupJan(raw){
   const jan=normalizeJan(raw);
   if(!validJan(jan))return{error:'JAN/EANコードを確認してください（8〜14桁）'};
 
-  let p=catalog().find(x=>x.jan===jan)||null;
+  let p=sanitizeCachedProduct(catalog().find(x=>x.jan===jan)||null);
   let exactSeiyu=null;
   const enabledRetail=retailOptedInIds();
   let retailAttempted=[];
