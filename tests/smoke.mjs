@@ -44,6 +44,8 @@ assert.ok(app.includes('data-retail-optin'),'retail settings toggles missing');
 assert.ok(app.includes('data-reader-optin'),'reader opt-in toggle missing');
 assert.ok(app.includes("reader='+(S.readerOptIn?'1':'0')"),'reader opt-in gate missing from retail request');
 assert.ok(app.includes('/api/retail/lookup?jan='),'retail JAN lookup missing');
+assert.ok(app.includes("cache:'no-store'"),'lookup requests must bypass browser HTTP cache');
+assert.ok(retailLookup.includes("'cache-control':'no-store'"),'retail lookup responses must not cache misses');
 assert.ok(app.includes("S.route==='options'?renderOptions()"),'options screen missing');
 assert.ok(makerLookup.includes("prefix:'4903110'"),'Yamazaki maker route missing');
 assert.ok(makerLookup.includes("prefix:'4902410'"),'Fuji Pan maker route missing');
