@@ -32,7 +32,7 @@ function parseItem(body,jan,target,markdown){
   const raw=String(body||'');
   const text=clean(raw);
   const heading=markdown
-    ?((raw.match(/^#\s+(.+)$/m)||[])[1]||'')
+    ?readerProductName(raw)
     :((raw.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i)||[])[1]||'');
   const name=clean(heading).replace(/^〖[^〗]+〗/,'').trim();
   if(!name||/サイト内検索|検索結果|ページが見つかりません/i.test(name))return null;
@@ -54,6 +54,22 @@ function parseItem(body,jan,target,markdown){
     nutritionSourceUrl:nutrition.kcal!=null?target:'',
     source:'seiyu',sourceUrl:target
   };
+}
+
+function readerProductName(raw){
+  // Reader's first # heading can be a Markdown link to the Seiyu logo.
+  const headings=Array.from(raw.matchAll(/^#{1,5}\s+(.+)$/gm)).map(m=>m[1].trim());
+  const valid=x=>x
+    &&x.length<120
+    &&!/\[!?\[|\]\(|https?:\/\//i.test(x)
+    &&!/^(?:西友ネットスーパー|楽天全国スーパー|商品詳細|商品説明|栄養成分|カート|カテゴリ|検索|ログイン|お気に入り)/.test(x)
+    &&!/^[-*+\d\s]+$/.test(x)
+    &&/[ぁ-んァ-ン一-龯]/.test(x);
+  const candidate=headings.find(valid);
+  if(candidate)return candidate;
+  const title=(raw.match(/^Title:\s*(.+)$/mi)||[])[1]||'';
+  const titleName=title.split(/\s*[|｜]\s*/)[0].replace(/\s*[-–—]\s*(?:西友ネットスーパー|楽天全国スーパー).*$/,'').trim();
+  return valid(titleName)?titleName:'';
 }
 
 function parseNutrition(text){
