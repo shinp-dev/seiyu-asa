@@ -425,6 +425,7 @@ function scanResult(r){
     '<div class="metrics"><div><small>店頭</small><b>'+yen(p.storePrice)+'</b></div>'+
     '<div><small>ネット参考</small><b>'+yen(p.netPrice)+'</b></div>'+
     '<div><small>kcal</small><b>'+kc(p.kcal)+'</b>'+(p.kcalBasis?'<em>'+esc(p.kcalBasis)+'</em>':'')+'</div></div>'+
+    (p.kcal!=null&&p.nutritionSourceUrl?'<p class="mini-note">栄養情報：<a target="_blank" rel="noreferrer" href="'+esc(p.nutritionSourceUrl)+'">'+esc(p.nutritionSource||'掲載元')+'</a>（パッケージ表示を優先）</p>':'')+
     (d!==null?'<p class="callout">'+(d>=0?'店頭のほうが '+yen(d)+' 安い':'ネット参考のほうが '+yen(Math.abs(d))+' 安い')+'</p>':'<p class="hint">店頭価格を登録するとネット参考価格との差額を出せます。</p>')+
     (p.sourceUrl?'<a class="source-link" target="_blank" rel="noreferrer" href="'+esc(p.sourceUrl)+'">情報元を確認 →</a>':'')+
     (p.maker&&p.maker.lookupUrl?'<a class="source-link" target="_blank" rel="noreferrer" href="'+esc(p.maker.lookupUrl)+'">'+esc(p.maker.brand)+'公式で確認 →</a>':'')+
@@ -560,7 +561,7 @@ async function lookupJan(raw){
   const enabledRetail=retailOptedInIds();
   let retailAttempted=[];
 
-  const sj=await fetchJson('/api/seiyu/product?jan='+encodeURIComponent(jan),5500);
+  const sj=await fetchJson('/api/seiyu/product?jan='+encodeURIComponent(jan)+'&reader='+(S.readerOptIn?'1':'0'),9000);
   if(sj&&sj.item){
     exactSeiyu=sj.item;
     p=Object.assign({},p||{},{
@@ -572,6 +573,8 @@ async function lookupJan(raw){
       netPrice:sj.item.taxIncludedPrice||sj.item.price||(p&&p.netPrice)||null,
       kcal:sj.item.kcal!=null?sj.item.kcal:(p&&p.kcal!=null?p.kcal:null),
       kcalBasis:sj.item.kcalBasis||(p&&p.kcalBasis)||'',
+      nutritionSource:sj.item.kcal!=null?'西友ネットスーパー':((p&&p.nutritionSource)||''),
+      nutritionSourceUrl:sj.item.kcal!=null?(sj.item.nutritionSourceUrl||sj.item.sourceUrl):((p&&p.nutritionSourceUrl)||''),
       quantity:sj.item.size||(p&&p.quantity)||'',
       imageUrl:(p&&p.imageUrl)||'',
       source:'seiyu',
@@ -620,7 +623,7 @@ async function lookupJan(raw){
     }
   }
 
-  if((!p||!p.name||p.name==='未登録商品'||/^JAN /.test(p.name))&&enabledRetail.length){
+  if((!p||!p.name||p.name==='未登録商品'||/^JAN /.test(p.name)||p.kcal==null)&&enabledRetail.length){
     const rj=await fetchJson('/api/retail/lookup?jan='+encodeURIComponent(jan)+'&sources='+encodeURIComponent(enabledRetail.join(','))+'&reader='+(S.readerOptIn?'1':'0'),9000);
     retailAttempted=rj&&Array.isArray(rj.attempted)?rj.attempted:enabledRetail;
     if(rj&&rj.product){
@@ -628,19 +631,21 @@ async function lookupJan(raw){
       p=Object.assign({},p||{},{
         id:(p&&p.id)||('jan-'+jan),
         jan,
-        name:x.name||(p&&p.name)||'未登録商品',
+        name:((p&&p.name&&!/^(未登録商品|JAN )/.test(p.name))?p.name:x.name)||(p&&p.name)||'未登録商品',
         brand:x.brand||(p&&p.brand)||'',
         manufacturer:x.manufacturer||(p&&p.manufacturer)||'',
         category:(p&&p.category)||inferCategory(x),
         storePrice:p&&p.storePrice!=null?p.storePrice:null,
         netPrice:x.netPrice!=null?x.netPrice:(p&&p.netPrice!=null?p.netPrice:null),
-        kcal:p&&p.kcal!=null?p.kcal:null,
-        kcalBasis:(p&&p.kcalBasis)||'',
+        kcal:p&&p.kcal!=null?p.kcal:(x.kcal!=null?x.kcal:null),
+        kcalBasis:(p&&p.kcalBasis)||(x.kcalBasis||''),
+        nutritionSource:(p&&p.kcal!=null&&p.nutritionSource)?p.nutritionSource:(x.nutritionSource||''),
+        nutritionSourceUrl:(p&&p.kcal!=null&&p.nutritionSourceUrl)?p.nutritionSourceUrl:(x.nutritionSourceUrl||''),
         quantity:x.quantity||(p&&p.quantity)||'',
         imageUrl:x.imageUrl||(p&&p.imageUrl)||'',
-        source:'retail',
+        source:(p&&p.source&&p.source!=='manual')?p.source:'retail',
         retailer:x.retailer||'',
-        sourceUrl:x.sourceUrl||''
+        sourceUrl:(p&&p.sourceUrl)||x.sourceUrl||''
       });
     }
   }
