@@ -10,7 +10,8 @@ const MAKER_OPTIONS=[
 const RETAIL_OPTIONS=[
   {id:'beisia',label:'ベイシア'},
   {id:'tokiwa',label:'トキハ'},
-  {id:'youme',label:'ゆめデリバリー'}
+  {id:'youme',label:'ゆめデリバリー'},
+  {id:'rakutenmart',label:'楽天マート'}
 ];
 const SEED=[
 {id:'s1',jan:'4900000000016',name:'クリームパン',category:'snack',storePrice:138,netPrice:158,kcal:356,source:'demo'},
@@ -353,9 +354,9 @@ function accept(){
 
 function renderOptions(){
   return '<section class="hero"><small>外部問い合わせ</small><h2>商品情報の検索先</h2><p>すべてOFFが初期値です。西友・商品DBで見つからない時だけ、ONにした検索先へJANを送ります。</p></section>'+
-  '<div class="title"><h3>ネットスーパー</h3><span>商品名・栄養情報のみ</span></div>'+
+  '<div class="title"><h3>外部商品ページ</h3><span>商品名・栄養情報のみ / 価格には使わない</span></div>'+
   '<section class="card settings">'+
-    RETAIL_OPTIONS.map(m=>'<label class="setting-row"><span><b>'+esc(m.label)+'</b><small>JANを公開商品ページへ送信</small></span><input type="checkbox" data-retail-optin="'+esc(m.id)+'" '+(S.retailOptIns[m.id]?'checked':'')+'></label>').join('')+
+    RETAIL_OPTIONS.map(m=>'<label class="setting-row"><span><b>'+esc(m.label)+'</b><small>JANを商品情報の照合に使用（価格は採用しない）</small></span><input type="checkbox" data-retail-optin="'+esc(m.id)+'" '+(S.retailOptIns[m.id]?'checked':'')+'></label>').join('')+
   '</section>'+
   '<div class="title"><h3>ページ取得補助</h3><span>必要な時だけ</span></div>'+
   '<section class="card settings">'+
@@ -400,8 +401,8 @@ async function runNameSearch(q){
 
 function manualLookupHint(p){
   const notes=[];
-  if(p.retailAttempted&&p.retailAttempted.length)notes.push('ONにした外部ネットスーパーでもJAN完全一致が見つかりませんでした。');
-  else if(p.retailOptInAvailable)notes.push('外部ネットスーパー検索は設定でOFFです。ONにすると次回から照会します。');
+  if(p.retailAttempted&&p.retailAttempted.length)notes.push('ONにした外部商品ページでもJAN完全一致が見つかりませんでした。');
+  else if(p.retailOptInAvailable)notes.push('外部商品ページ検索は設定でOFFです。ONにすると次回から照会します。');
   if(p.maker&&p.maker.lookupUrl)notes.push((p.maker.brand||'メーカー')+'公式でも商品名までは特定できませんでした。');
   else if(p.makerOptInAvailable)notes.push(p.makerOptInAvailable.label+'公式への問い合わせは設定でOFFです。');
   return notes.join(' ')||'このJANは外部商品情報から特定できませんでした。商品名と店頭価格を一度保存すれば、次回から端末内で即座に呼び出せます。';
@@ -435,7 +436,7 @@ function scanResult(r){
     '<div><small>西友ネット参考</small><b>'+yen(p.netPrice)+'</b></div>'+
     '<div><small>kcal</small><b>'+kc(p.kcal)+'</b>'+(p.kcalBasis?'<em>'+esc(p.kcalBasis)+'</em>':'')+'</div></div>'+
     (p.kcal!=null&&p.nutritionSourceUrl?'<p class="mini-note">栄養情報：<a target="_blank" rel="noreferrer" href="'+esc(p.nutritionSourceUrl)+'">'+esc(p.nutritionSource||'掲載元')+'</a>（パッケージ表示を優先）</p>':'')+
-    (d!==null?'<p class="callout">'+(d>=0?'店頭のほうが '+yen(d)+' 安い':'ネット参考のほうが '+yen(Math.abs(d))+' 安い')+'</p>':'<p class="hint">店頭価格を登録するとネット参考価格との差額を出せます。</p>')+
+    (d!==null?'<p class="callout">'+(d>=0?'店頭のほうが '+yen(d)+' 安い':'西友ネット参考のほうが '+yen(Math.abs(d))+' 安い')+'</p>':'<p class="hint">店頭価格を登録すると西友ネット参考価格との差額を出せます。</p>')+
     (p.sourceUrl?'<a class="source-link" target="_blank" rel="noreferrer" href="'+esc(p.sourceUrl)+'">情報元を確認 →</a>':'')+
     (p.maker&&p.maker.lookupUrl?'<a class="source-link" target="_blank" rel="noreferrer" href="'+esc(p.maker.lookupUrl)+'">'+esc(p.maker.brand)+'公式で確認 →</a>':'')+
     (p.jan?'<button class="stock-link" data-stock-jan="'+esc(p.jan)+'">西友の店舗在庫を確認</button>':'')+
@@ -460,7 +461,7 @@ function scanResult(r){
   if(alt.length)html+='<div class="title"><h3>手元の候補</h3><span>同カテゴリ</span></div>'+alt.map(x=>card(x,{choose:true})).join('');
   html+='<button class="secondary find-alts" id="find-alts">'+((r.alternatives&&r.alternatives.length)?'西友の別候補を更新':'西友で代わりを探す')+'</button>';
   if(r.alternatives&&r.alternatives.length){
-    html+='<div class="title"><h3>西友で代わりにこれ</h3><span>ネット参考価格</span></div>'+
+    html+='<div class="title"><h3>西友で代わりにこれ</h3><span>西友ネット参考価格</span></div>'+
       r.alternatives.map(x=>card(x,{choose:true,preferNet:true})).join('');
   }
   return html;
