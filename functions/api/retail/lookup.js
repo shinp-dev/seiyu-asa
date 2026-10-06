@@ -168,10 +168,26 @@ async function getHtml(url){
       cf:{cacheTtl:21600,cacheEverything:true}
     });
     if(!r.ok)return '';
-    return await r.text();
+    const buf=await r.arrayBuffer();
+    return decodeHtml(buf,r.headers.get('content-type')||'');
   }catch(e){
     return '';
   }
+}
+
+function decodeHtml(buf,contentType){
+  const bytes=new Uint8Array(buf);
+  const head=new TextDecoder('utf-8',{fatal:false}).decode(bytes.slice(0,4096));
+  const declared=((contentType.match(/charset\s*=\s*["']?([^;"'\s]+)/i)||[])[1]
+    ||(head.match(/<meta[^>]+charset\s*=\s*["']?([^"'\s/>]+)/i)||[])[1]
+    ||(head.match(/<meta[^>]+content=["'][^"']*charset\s*=\s*([^;"'\s]+)/i)||[])[1]
+    ||'utf-8').toLowerCase();
+
+  const encoding=/shift[_-]?jis|sjis|windows-31j|cp932/.test(declared)?'shift_jis'
+    :/euc[_-]?jp/.test(declared)?'euc-jp'
+    :'utf-8';
+  try{return new TextDecoder(encoding,{fatal:false}).decode(bytes)}
+  catch(e){return new TextDecoder('utf-8',{fatal:false}).decode(bytes)}
 }
 
 function clean(s){
