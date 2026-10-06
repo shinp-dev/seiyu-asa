@@ -5,11 +5,13 @@ const read=p=>fs.readFileSync(new URL('../'+p,import.meta.url),'utf8');
 const app=read('app.js');
 const sw=read('sw.js');
 const makerLookup=read('functions/api/maker/lookup.js');
+const retailLookup=read('functions/api/retail/lookup.js');
 const functionFiles=[
   'functions/api/seiyu/search.js',
   'functions/api/seiyu/product.js',
   'functions/api/product/lookup.js',
-  'functions/api/maker/lookup.js'
+  'functions/api/maker/lookup.js',
+  'functions/api/retail/lookup.js'
 ];
 
 new Function(app);
@@ -37,9 +39,17 @@ assert.ok(app.includes('recDate'),'daily recommendation refresh missing');
 assert.ok(!app.includes('KNOWN_PRODUCTS'),'hardcoded product dictionary must not be bundled');
 assert.ok(app.includes('MAKER_OPTIONS'),'manufacturer prefix metadata missing');
 assert.ok(app.includes('makerOptedIn(jan)'),'manufacturer opt-in gate missing');
+assert.ok(app.includes('retailOptedInIds()'),'retail opt-in gate missing');
+assert.ok(app.includes('data-retail-optin'),'retail settings toggles missing');
+assert.ok(app.includes('/api/retail/lookup?jan='),'retail JAN lookup missing');
 assert.ok(app.includes("S.route==='options'?renderOptions()"),'options screen missing');
 assert.ok(makerLookup.includes("prefix:'4903110'"),'Yamazaki maker route missing');
 assert.ok(makerLookup.includes("prefix:'4902410'"),'Fuji Pan maker route missing');
 assert.ok(makerLookup.includes("prefix:'4901820'"),'Pasco maker route missing');
+assert.ok(retailLookup.includes("id:'beisia'"),'Beisia retail route missing');
+assert.ok(retailLookup.includes("id:'tokiwa'"),'Tokiwa retail route missing');
+assert.ok(retailLookup.includes("id:'youme'"),'Youme retail route missing');
+assert.ok(retailLookup.includes("if(!requested.length)"),'retail lookup must require explicit opt-in sources');
+assert.ok(retailLookup.includes("compact.includes(jan)"),'retail lookup must require exact JAN in fetched page');
 
 console.log('smoke: OK');
