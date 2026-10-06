@@ -1,6 +1,6 @@
 const CAT={snack:'お菓子',lunch:'昼メシ',drink:'飲み物'};
 const ICON={snack:'🍫',lunch:'🍙',drink:'🥤'};
-const SOURCE={demo:'デモ',registered:'登録済み',seiyu:'西友ネット',openfoodfacts:'商品DB',retail:'外部ネットスーパー',maker:'メーカー公式',manual:'手入力'};
+const SOURCE={registered:'登録済み',seiyu:'西友ネット',openfoodfacts:'商品DB',retail:'外部ネットスーパー',maker:'メーカー公式',manual:'手入力'};
 const REASONS={expensive:'高い',small:'量が足りない',calorie:'カロリーの割に満足しない',taste:'味が好みじゃない',other:'その他'};
 const MAKER_OPTIONS=[
   {id:'yamazaki',prefix:'4903110',label:'ヤマザキ'},
@@ -12,17 +12,6 @@ const RETAIL_OPTIONS=[
   {id:'tokiwa',label:'トキハ'},
   {id:'youme',label:'ゆめデリバリー'}
 ];
-const SEED=[
-{id:'s1',jan:'4900000000016',name:'クリームパン',category:'snack',storePrice:138,netPrice:158,kcal:356,source:'demo'},
-{id:'s2',jan:'4900000000023',name:'チョコバー',category:'snack',storePrice:48,netPrice:58,kcal:118,source:'demo'},
-{id:'s3',jan:'4900000000030',name:'ミックスナッツ 小袋',category:'snack',storePrice:158,netPrice:178,kcal:186,source:'demo'},
-{id:'l1',jan:'4900000000105',name:'カツ丼',category:'lunch',storePrice:498,netPrice:538,kcal:892,source:'demo'},
-{id:'l2',jan:'4900000000112',name:'鮭おにぎり + たまごサンド',category:'lunch',storePrice:398,netPrice:438,kcal:486,source:'demo'},
-{id:'l3',jan:'4900000000129',name:'おにぎり2個 + ゆでたまご',category:'lunch',storePrice:358,netPrice:398,kcal:421,source:'demo'},
-{id:'d1',jan:'4900000000201',name:'コーラ 500ml',category:'drink',storePrice:108,netPrice:128,kcal:225,source:'demo'},
-{id:'d2',jan:'4900000000218',name:'無糖茶 600ml',category:'drink',storePrice:88,netPrice:98,kcal:0,source:'demo'},
-{id:'d3',jan:'4900000000225',name:'炭酸水 500ml',category:'drink',storePrice:79,netPrice:89,kcal:0,source:'demo'}];
-
 const K={
   catalog:'sa.catalog',
   history:'sa.history',
@@ -34,7 +23,7 @@ const K={
 const S={
   route:'today',
   focus:'drink',
-  fixed:'d1',
+  fixed:null,
   rec:null,
   recDate:null,
   last:null,
@@ -133,7 +122,7 @@ function sanitizeCachedProduct(p){
   });
 }
 function catalog(){
-  const m=new Map(SEED.map(p=>[p.id,p]));
+  const m=new Map();
   const saved=read(K.catalog,[]);
   const sanitized=saved.map(sanitizeCachedProduct);
   if(sanitized.some((p,i)=>p!==saved[i]))write(K.catalog,sanitized);
@@ -149,9 +138,7 @@ function saveProduct(p){
   write(K.catalog,a);
 }
 function categoryCandidates(c,includeNg){
-  const all=catalog().filter(p=>p.category===c&&(includeNg||!ng(p.id)));
-  const real=all.filter(p=>p.source!=='demo');
-  return real.length?real:all;
+  return catalog().filter(p=>p.category===c&&(includeNg||!ng(p.id)));
 }
 function productById(id){return catalog().find(x=>x.id===id)||null}
 
@@ -239,7 +226,6 @@ function card(p,opts){
     '<div class="ico">'+ICON[p.category]+'</div>'+
     '<div class="grow"><div>'+
       '<span class="badge">'+CAT[p.category]+'</span>'+
-      (p.source==='demo'?'<span class="badge demo">DEMO</span>':'')+
       (ng(p.id)?'<span class="badge bad">NG</span>':'')+
     '</div>'+
     '<b>'+esc(p.name)+'</b>'+
@@ -283,7 +269,7 @@ function todayInsight(ps,price,cal,base){
     return a+(d!=null&&d>0?d:0);
   },0);
   if(netSaved>0)parts.push('西友ネット参考より合計'+yen(netSaved)+'安め');
-  const fresh=ps.filter(p=>p.source!=='demo'&&eatenCount(p.id)===0).length;
+  const fresh=ps.filter(p=>eatenCount(p.id)===0).length;
   if(fresh>0)parts.push('初めての商品 '+fresh+'つ');
   return parts.slice(0,2).join(' / ')||'好きな1品は固定して、残りだけ整えています';
 }
@@ -291,8 +277,13 @@ function todayInsight(ps,price,cal,base){
 function renderToday(){
   if(S.recDate!==today()){S.rec=null;S.lastRec={}}
   const r=S.rec||makeRec();
-  const realCount=catalog().filter(p=>p.source!=='demo').length;
+  const realCount=catalog().length;
   const ps=Object.values(r);
+  if(realCount===0){
+    return '<section class="hero"><small>出勤前の西友だけ</small><h2>今日の3点、これでどう？</h2><p>お菓子 + 昼メシ + ペットボトル。夕方の買い物は混ぜない。</p></section>'+
+      '<section class="onboarding card"><b>まずは商品を1つ登録</b><p>登録商品はまだありません。店頭でバーコードを読むか、商品名から西友を検索すると商品辞書が育ちます。</p><button class="primary small" data-jump="scan">スキャンを始める</button></section>';
+  }
+  const complete=ps.length===Object.keys(CAT).length;
   const priced=ps.map(effectivePrice);
   const price=priced.reduce((a,x)=>a+(Number.isFinite(x.value)?x.value:0),0);
   const hasNetEstimate=priced.some(x=>x.source==='net');
@@ -304,19 +295,20 @@ function renderToday(){
     :'<p class="compare muted">3点とも食べた記録が2日分たまると、いつもの朝との差を表示します。</p>';
   const insight=todayInsight(ps,price,cal,base);
 
-  return '<section class="hero"><small>出勤前の西友だけ</small><h2>今日の3点、これでどう？</h2><p>お菓子 + 昼メシ + ペットボトル。夕方の買い物は混ぜない。</p></section>'+ (realCount<3?'<section class="onboarding card"><b>まずは自分の西友を育てる</b><p>実商品はまだ '+realCount+' 件。店頭でバーコードを読むほど、架空のDEMOではなく普段の商品から提案できるようになります。</p><button class="secondary small" data-jump="scan">1つスキャンする</button></section>':'')+
+  return '<section class="hero"><small>出勤前の西友だけ</small><h2>今日の3点、これでどう？</h2><p>お菓子 + 昼メシ + ペットボトル。夕方の買い物は混ぜない。</p></section>'+ (realCount<3?'<section class="onboarding card"><b>商品をもう少し登録</b><p>登録商品はまだ '+realCount+' 件。3カテゴリそろうと、朝の3点セットを提案できます。</p><button class="secondary small" data-jump="scan">商品を追加する</button></section>':'')+
   '<section class="card focus"><b>今日はこれを固定</b><div class="pills">'+
     Object.keys(CAT).map(c=>'<button data-focus="'+c+'" class="pill '+(S.focus===c?'on':'')+'">'+CAT[c]+'</button>').join('')+
-    '</div><select id="fixed">'+categoryCandidates(S.focus,false).map(p=>'<option value="'+p.id+'" '+(p.id===S.fixed?'selected':'')+'>'+esc(p.name)+(p.source==='demo'?' (DEMO)':'')+'</option>').join('')+'</select></section>'+
+    '</div><select id="fixed">'+(categoryCandidates(S.focus,false).length?categoryCandidates(S.focus,false).map(p=>'<option value="'+p.id+'" '+(p.id===S.fixed?'selected':'')+'>'+esc(p.name)+'</option>').join(''):'<option value="">未登録</option>')+'</select></section>'+
   '<div class="title"><h3>今日のセット</h3><button id="reroll">別のセット</button></div>'+
   ps.map(p=>card(p)).join('')+
   '<section class="summary"><small>合計'+(hasNetEstimate?'（西友ネット参考含む）':'')+(hasUnknownPrice?'（価格未登録あり）':'')+'</small><strong>'+yen(price)+' / '+kc(cal)+'</strong><div class="insight">'+esc(insight)+'</div>'+comparison+
     '<p>'+CAT[S.focus]+'は固定。NG商品と最近食べたものを避けながら、残りを提案しています。</p></section>'+
-  '<button class="primary" id="accept">これでいく</button>'+
+  (complete?'<button class="primary" id="accept">これでいく</button>':'<p class="empty compact">3カテゴリそろうと「これでいく」を使えます。</p>')+
   '<button class="secondary" data-jump="scan">店頭の商品をスキャンして比べる</button>';
 }
 
 function accept(){
+  if(Object.values(S.rec||{}).length!==Object.keys(CAT).length){toast('3カテゴリの商品を登録してください');return}
   const h=history();
   for(let i=h.length-1;i>=0;i--){
     if(h[i].date===today()&&h[i].status==='planned'&&(h[i].slot==='morning'||!h[i].slot)){
@@ -374,9 +366,9 @@ function renderScan(){
   return '<section class="hero"><small>店頭で迷ったら</small><h2>バーコードで判定</h2><p>JAN/EANを読んで、西友ネット参考価格・店頭価格・カロリー・過去の後悔をまとめて確認。</p></section>'+
   '<section class="card scan"><div class="video"><video id="video" playsinline muted></video><i></i></div>'+
   '<div class="row"><button class="primary small" id="start">カメラで読む</button><button class="secondary small" id="stop">停止</button></div>'+
-  '<div class="manual"><input id="jan" inputmode="numeric" autocomplete="off" placeholder="JANコードを手入力"><button id="lookup">検索</button></div>'+
+
   '<label class="barcode-upload">バーコード写真から読む<input id="barcode-image" type="file" accept="image/*" capture="environment"></label>'+
-  '<p class="mini-note">自動読取に未対応でもJAN手入力で使えます。</p>'+
+  '<p class="mini-note">カメラまたはバーコード写真から読み取れます。商品名検索も使えます。</p>'+
   '<div class="name-search"><input id="name-q" value="'+esc(S.nameQuery)+'" placeholder="商品名でも西友を検索"><button id="name-search">検索</button></div>'+
   '<div id="name-results">'+renderNameResults()+'</div></section>'+
   '<div id="result">'+(S.last?scanResult(S.last):'')+'</div>';
@@ -721,7 +713,7 @@ async function lookupJan(raw){
       if(p.netPrice!=null)p.netPriceSource='seiyu';
     }
   }
-  if(p.source!=='demo'&&p.source!=='manual'&&!/^JAN /.test(p.name))saveProduct(p);
+  if(p.source!=='manual'&&!/^JAN /.test(p.name))saveProduct(p);
   return{product:p,seiyu:seiyu,exactSeiyu:exactSeiyu};
 }
 async function doLookup(jan){
@@ -898,7 +890,6 @@ function productDetailCard(p){
   const d=priceDelta(p);
   return '<article class="card dictionary '+(ng(p.id)?'is-ng':'')+'" data-product-search="'+esc(((p.name||'')+' '+(p.jan||'')+' '+CAT[p.category]).toLowerCase())+'">'+
     '<div class="dict-head"><div><span class="badge">'+CAT[p.category]+'</span>'+
-      (p.source==='demo'?'<span class="badge demo">DEMO</span>':'')+
       (ng(p.id)?'<span class="badge bad">NG</span>':'')+
       '<h3>'+esc(p.name)+'</h3></div><div class="dict-price"><b>'+yen(p.storePrice)+'</b><small>'+kc(p.kcal)+'</small></div></div>'+
     '<div class="dict-metrics"><span>提案 '+x.proposed+'回</span><span>採用 '+x.selected+'回</span><span>選ばれ率 '+rate+'%</span><span>食べた '+eatenCount(p.id)+'回</span></div>'+
@@ -940,7 +931,7 @@ function eatDay(day){
 function resetData(){
   if(!confirm('この端末の履歴・登録商品・学習データを削除します。JSONバックアップを残していないデータは戻せません。'))return;
   Object.values(K).forEach(k=>localStorage.removeItem(k));
-  S.focus='drink';S.fixed='d1';S.rec=null;S.last=null;S.reasonFor=null;S.productFilter='all';
+  S.focus='drink';S.fixed=null;S.rec=null;S.last=null;S.reasonFor=null;S.productFilter='all';
   toast('端末データを初期化しました');
   render();
 }
@@ -1070,10 +1061,6 @@ function bind(){
   if(st)st.onclick=startScan;
   const sp=$('#stop');
   if(sp)sp.onclick=stopScan;
-  const lu=$('#lookup');
-  if(lu)lu.onclick=()=>doLookup($('#jan').value);
-  const ji=$('#jan');
-  if(ji)ji.onkeydown=e=>{if(e.key==='Enter')doLookup(ji.value)};
   const bi=$('#barcode-image');
   if(bi)bi.onchange=()=>{if(bi.files&&bi.files[0])scanBarcodeImage(bi.files[0])};
   const nq=$('#name-q'),ns=$('#name-search');
@@ -1148,13 +1135,13 @@ function bind(){
     const p=productById(b.dataset.useProduct)||(S.last&&Array.isArray(S.last.alternatives)?S.last.alternatives.find(x=>x.id===b.dataset.useProduct):null);
     if(!p)return;
     if(S.last&&S.last.product)recordDecision(S.last.product,p);
-    if(p.source!=='demo')saveProduct(p);
+    saveProduct(p);
     S.focus=p.category;S.fixed=p.id;savePrefs();S.rec=null;S.route='today';toast('今日の優先商品にしました');render();
   });
   $$('[data-use-scan]').forEach(b=>b.onclick=()=>{
     const p=S.last&&S.last.product;
     if(!p)return;
-    if(p.source!=='demo')saveProduct(p);
+    saveProduct(p);
     S.focus=p.category;S.fixed=p.id;savePrefs();S.rec=null;S.route='today';toast('今日の優先商品にしました');render();
   });
   $$('[data-stock-jan]').forEach(b=>b.onclick=()=>{

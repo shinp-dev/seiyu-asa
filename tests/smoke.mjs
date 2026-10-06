@@ -30,6 +30,10 @@ assert.ok(app.includes('findSeiyuAlternatives'),'Seiyu alternative discovery mis
 assert.ok(app.includes('recordDecision'),'what-if decision tracking missing');
 assert.ok(app.includes('serviceWorker.register'),'service worker registration missing');
 assert.ok(app.includes('scanBarcodeImage'),'barcode image scan missing');
+assert.ok(!app.includes('const SEED='),'demo seed catalog must stay removed');
+assert.ok(!app.includes("source:'demo'"),'demo products must stay removed');
+assert.ok(!app.includes('id="jan"'),'manual JAN entry must stay removed');
+assert.ok(!app.includes('id="lookup"'),'manual JAN lookup button must stay removed');
 assert.ok(app.includes('runNameSearch'),'Seiyu product-name search fallback missing');
 assert.ok(app.includes('monthDecisionSummary'),'what-if monthly summary missing');
 assert.ok(app.includes('data-stock-jan'),'official Seiyu stock lookup missing');
