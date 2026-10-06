@@ -47,7 +47,8 @@ const S={
   nameResults:[],
   nameQuery:'',
   makerOptIns:{},
-  retailOptIns:{}
+  retailOptIns:{},
+  readerOptIn:false
 };
 
 const $=s=>document.querySelector(s);
@@ -94,10 +95,11 @@ function loadPrefs(){
   if(p.fixed)S.fixed=p.fixed;
   S.makerOptIns=p.makerOptIns&&typeof p.makerOptIns==='object'?p.makerOptIns:{};
   S.retailOptIns=p.retailOptIns&&typeof p.retailOptIns==='object'?p.retailOptIns:{};
+  S.readerOptIn=p.readerOptIn===true;
 }
 function savePrefs(){
   const prev=read(K.prefs,{});
-  write(K.prefs,Object.assign({},prev,{focus:S.focus,fixed:S.fixed,makerOptIns:S.makerOptIns,retailOptIns:S.retailOptIns}));
+  write(K.prefs,Object.assign({},prev,{focus:S.focus,fixed:S.fixed,makerOptIns:S.makerOptIns,retailOptIns:S.retailOptIns,readerOptIn:S.readerOptIn}));
 }
 function makerForJan(jan){return MAKER_OPTIONS.find(m=>jan.startsWith(m.prefix))||null}
 function makerOptedIn(jan){
@@ -329,6 +331,11 @@ function renderOptions(){
   '<div class="title"><h3>ネットスーパー</h3><span>JAN完全一致だけ採用</span></div>'+
   '<section class="card settings">'+
     RETAIL_OPTIONS.map(m=>'<label class="setting-row"><span><b>'+esc(m.label)+'</b><small>JANを公開商品ページへ送信</small></span><input type="checkbox" data-retail-optin="'+esc(m.id)+'" '+(S.retailOptIns[m.id]?'checked':'')+'></label>').join('')+
+  '</section>'+
+  '<div class="title"><h3>ページ取得補助</h3><span>必要な時だけ</span></div>'+
+  '<section class="card settings">'+
+    '<label class="setting-row"><span><b>Jina Reader</b><small>ネットスーパー直取得が拒否された時だけ、商品ページURL（JANを含む）を外部の無料Readerへ送信</small></span><input type="checkbox" data-reader-optin="1" '+(S.readerOptIn?'checked':'')+'></label>'+
+    '<p class="mini-note privacy-note">初期OFFです。ONのネットスーパーがある場合だけ使います。Jina Readerは無認証の無料枠を使用します。</p>'+
   '</section>'+
   '<div class="title"><h3>メーカー公式</h3><span>補助検索</span></div>'+
   '<section class="card settings">'+
@@ -598,7 +605,7 @@ async function lookupJan(raw){
   }
 
   if((!p||!p.name||p.name==='未登録商品'||/^JAN /.test(p.name))&&enabledRetail.length){
-    const rj=await fetchJson('/api/retail/lookup?jan='+encodeURIComponent(jan)+'&sources='+encodeURIComponent(enabledRetail.join(',')),6500);
+    const rj=await fetchJson('/api/retail/lookup?jan='+encodeURIComponent(jan)+'&sources='+encodeURIComponent(enabledRetail.join(','))+'&reader='+(S.readerOptIn?'1':'0'),9000);
     retailAttempted=rj&&Array.isArray(rj.attempted)?rj.attempted:enabledRetail;
     if(rj&&rj.product){
       const x=rj.product;
@@ -988,6 +995,11 @@ function bind(){
     S.retailOptIns[x.dataset.retailOptin]=!!x.checked;
     savePrefs();
     toast((RETAIL_OPTIONS.find(m=>m.id===x.dataset.retailOptin)||{label:'検索先'}).label+'検索を'+(x.checked?'ON':'OFF')+'にしました');
+  });
+  $$('[data-reader-optin]').forEach(x=>x.onchange=()=>{
+    S.readerOptIn=!!x.checked;
+    savePrefs();
+    toast('ページ取得補助を'+(x.checked?'ON':'OFF')+'にしました');
   });
   $$('[data-maker-optin]').forEach(x=>x.onchange=()=>{
     S.makerOptIns[x.dataset.makerOptin]=!!x.checked;
