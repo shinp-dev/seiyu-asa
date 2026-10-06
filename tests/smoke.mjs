@@ -73,7 +73,7 @@ assert.ok(retailLookup.includes("'shift_jis'"),'Shift_JIS retailer pages must be
 const seiyuModule=await import('data:text/javascript,'+encodeURIComponent(read('functions/api/seiyu/product.js')));
 const originalFetch=globalThis.fetch;
 const mockHtml='<html><h1>イチゴスペシャル</h1><div>1個 149円 (税込 160円)</div><h2>商品説明</h2><p>栄養成分 1個当り：エネルギー480kcal、脂質19.2g</p></html>';
-const mockReader='Title: イチゴスペシャル｜西友ネットスーパー\n# イチゴスペシャル\n1個 149円 (税込 160円)\n## 商品説明\n栄養成分 | 1個当り：エネルギー480kcal、脂質19.2g';
+const mockReader='Title: イチゴスペシャル｜西友ネットスーパー\n# [![Image 3: 西友ネットスーパー](https://cdn.example/img.png)](https://netsuper.rakuten.co.jp/seiyu/)\n# イチゴスペシャル\n1個 149円 (税込 160円)\n## 商品説明\n栄養成分 | 1個当り：エネルギー480kcal、脂質19.2g';
 try{
   let calls=[];
   globalThis.fetch=async url=>{
@@ -101,6 +101,7 @@ try{
   assert.equal(calls.length,1);
   r=await seiyuModule.onRequestGet({request:new Request('https://example.test/api/seiyu/product?jan=4903110330523&reader=1')});
   j=await r.json();
+  assert.equal(j.item.name,'イチゴスペシャル','Reader must not treat the site logo heading as product name');
   assert.equal(j.item.kcal,480,'opted-in Reader fallback must return kcal');
   assert.equal(j.item.kcalBasis,'1個当り');
   assert.equal(j.fetchVia,'jina-reader');
@@ -128,4 +129,5 @@ assert.equal(sanitize({name:'商品A',source:'retail',retailer:'トキハ',netPr
 assert.equal(sanitize({name:'商品A',source:'registered',netPrice:195,netPriceSource:'manual'}).netPrice,195,'manual reference prices must remain');
 assert.ok(!retailLookup.includes('priceText'),'retailer parser must not extract prices');
 assert.equal((retailLookup.match(/netPrice:null/g)||[]).length,2,'both retailer parsing routes must not return other-store prices');
+assert.ok(read('functions/api/seiyu/product.js').includes("readerProductName(raw)"),'Reader heading filter missing');
 console.log('smoke: OK');
