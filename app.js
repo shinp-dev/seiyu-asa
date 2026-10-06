@@ -118,7 +118,8 @@ function sanitizeCachedProduct(p){
     &&p.netPriceSource!=='seiyu'&&p.netPriceSource!=='manual';
   if(importedRetailPrice)p=Object.assign({},p,{netPrice:null,netPriceSource:null});
   const badMakerName=p.source==='maker'&&/サイト内検索|検索結果|site\s*search/i.test(p.name||'');
-  if(!badMakerName)return p;
+  const badReaderName=p.source==='seiyu'&&/^\s*\[!\[Image\s/i.test(p.name||'');
+  if(!badMakerName&&!badReaderName)return p;
   return Object.assign({},p,{
     name:'未登録商品',
     brand:'',
