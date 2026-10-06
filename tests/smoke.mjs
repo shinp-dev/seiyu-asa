@@ -50,6 +50,9 @@ assert.ok(app.includes("S.route==='options'?renderOptions()"),'options screen mi
 assert.ok(makerLookup.includes("prefix:'4903110'"),'Yamazaki maker route missing');
 assert.ok(makerLookup.includes("prefix:'4902410'"),'Fuji Pan maker route missing');
 assert.ok(makerLookup.includes("prefix:'4901820'"),'Pasco maker route missing');
+assert.ok(!makerLookup.includes('const direct=extractProduct(html,target,maker,jan)'),'maker search page must not be accepted as a product');
+assert.ok(makerLookup.includes("search\\.yamazakipan\\.co\\.jp"),'Yamazaki search host guard missing');
+assert.ok(makerLookup.includes("'cache-control':'no-store'"),'maker lookup responses must not cache false matches');
 assert.ok(retailLookup.includes("id:'beisia'"),'Beisia retail route missing');
 assert.ok(retailLookup.includes("id:'tokiwa'"),'Tokiwa retail route missing');
 assert.ok(retailLookup.includes("id:'youme'"),'Youme retail route missing');
