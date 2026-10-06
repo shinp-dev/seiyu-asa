@@ -25,7 +25,8 @@ export async function onRequestGet(ctx){
     .split(',')
     .map(x=>x.trim())
     .filter(Boolean);
-  if(!requested.length)return json({product:null,attempted:[]});
+  const allowReader=u.searchParams.get('reader')==='1';
+  if(!requested.length)return json({product:null,attempted:[],readerUsed:false});
 
   const selected=RETAILERS.filter(x=>requested.includes(x.id));
   const attempted=[];
@@ -33,12 +34,22 @@ export async function onRequestGet(ctx){
   for(const retailer of selected){
     attempted.push(retailer.id);
     const sourceUrl=retailer.url(jan);
-    const html=await getHtml(sourceUrl);
-    if(!html)continue;
-    const product=extractProduct(html,sourceUrl,retailer,jan);
-    if(product)return json({product,attempted});
+    let body=await getHtml(sourceUrl);
+    let readerUsed=false;
+    let product=body?extractProduct(body,sourceUrl,retailer,jan):null;
+
+    if(!product&&allowReader){
+      body=await getReaderText(sourceUrl);
+      readerUsed=!!body;
+      product=body?extractReaderProduct(body,sourceUrl,retailer,jan):null;
+    }
+
+    if(product){
+      product.fetchVia=readerUsed?'jina-reader':'direct';
+      return json({product,attempted,readerUsed});
+    }
   }
-  return json({product:null,attempted});
+  return json({product:null,attempted,readerUsed:false});
 }
 
 function extractProduct(html,sourceUrl,retailer,jan){
@@ -74,6 +85,38 @@ function extractProduct(html,sourceUrl,retailer,jan){
   };
 }
 
+function extractReaderProduct(body,sourceUrl,retailer,jan){
+  const raw=String(body||'');
+  const compact=raw.replace(/[\s\-‐‑–—]/g,'');
+  if(!compact.includes(jan))return null;
+
+  const titleLine=(raw.match(/^Title:\s*(.+)$/mi)||[])[1]||'';
+  const headings=Array.from(raw.matchAll(/^#{1,3}\s+(.+)$/gm)).map(m=>m[1].trim());
+  const heading=headings.find(x=>!/(楽天全国スーパー|ネットスーパー|オンラインショップ|商品詳細)/.test(x))||headings[0]||'';
+  const name=cleanName(heading||titleLine,retailer.label);
+  if(!name)return null;
+
+  const taxIncluded=(raw.match(/税込[^0-9]{0,30}([0-9][0-9,]*(?:\.[0-9]+)?)\s*円/i)||[])[1];
+  const anyPrice=(raw.match(/([0-9][0-9,]*(?:\.[0-9]+)?)\s*円/)||[])[1];
+  const priceText=taxIncluded||anyPrice||'';
+  const netPrice=priceText?Number(priceText.replace(/,/g,'')):null;
+  const quantity=(raw.match(/(?:^|\s)(\d+(?:\.\d+)?\s*(?:g|kg|ml|mL|L|個|本|袋|枚|食))(?:\s|$)/m)||[])[1]||'';
+
+  return{
+    jan,
+    name,
+    brand:'',
+    manufacturer:'',
+    quantity,
+    netPrice:Number.isFinite(netPrice)?netPrice:null,
+    imageUrl:'',
+    retailer:retailer.label,
+    retailerId:retailer.id,
+    source:'retail',
+    sourceUrl
+  };
+}
+
 function cleanName(name,label){
   return String(name||'')
     .replace(/\s*[｜|:].*$/,'')
@@ -94,6 +137,23 @@ function decodeAttr(s){
     .replace(/&#39;/g,"'")
     .replace(/&nbsp;/g,' ')
     .trim();
+}
+
+async function getReaderText(url){
+  try{
+    const r=await fetch('https://r.jina.ai/'+url,{
+      headers:{
+        accept:'text/plain',
+        'dnt':'1',
+        'x-respond-with':'content'
+      },
+      cache:'no-store'
+    });
+    if(!r.ok)return '';
+    return await r.text();
+  }catch(e){
+    return '';
+  }
 }
 
 async function getHtml(url){

@@ -41,6 +41,8 @@ assert.ok(app.includes('MAKER_OPTIONS'),'manufacturer prefix metadata missing');
 assert.ok(app.includes('makerOptedIn(jan)'),'manufacturer opt-in gate missing');
 assert.ok(app.includes('retailOptedInIds()'),'retail opt-in gate missing');
 assert.ok(app.includes('data-retail-optin'),'retail settings toggles missing');
+assert.ok(app.includes('data-reader-optin'),'reader opt-in toggle missing');
+assert.ok(app.includes("reader='+(S.readerOptIn?'1':'0')"),'reader opt-in gate missing from retail request');
 assert.ok(app.includes('/api/retail/lookup?jan='),'retail JAN lookup missing');
 assert.ok(app.includes("S.route==='options'?renderOptions()"),'options screen missing');
 assert.ok(makerLookup.includes("prefix:'4903110'"),'Yamazaki maker route missing');
@@ -51,5 +53,8 @@ assert.ok(retailLookup.includes("id:'tokiwa'"),'Tokiwa retail route missing');
 assert.ok(retailLookup.includes("id:'youme'"),'Youme retail route missing');
 assert.ok(retailLookup.includes("if(!requested.length)"),'retail lookup must require explicit opt-in sources');
 assert.ok(retailLookup.includes("compact.includes(jan)"),'retail lookup must require exact JAN in fetched page');
+assert.ok(retailLookup.includes("u.searchParams.get('reader')==='1'"),'reader fallback must require explicit opt-in');
+assert.ok(retailLookup.includes("https://r.jina.ai/"),'Jina Reader fallback missing');
+assert.ok(retailLookup.includes("extractReaderProduct"),'reader response parser missing');
 
 console.log('smoke: OK');
