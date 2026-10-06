@@ -66,4 +66,53 @@ assert.ok(retailLookup.includes("extractReaderProduct"),'reader response parser 
 assert.ok(retailLookup.includes("decodeHtml"),'retailer charset decoder missing');
 assert.ok(retailLookup.includes("'shift_jis'"),'Shift_JIS retailer pages must be decoded');
 
+// Test the deployed-style Pages Function with an exact JAN, without needing network.
+const seiyuModule=await import('data:text/javascript,'+encodeURIComponent(read('functions/api/seiyu/product.js')));
+const originalFetch=globalThis.fetch;
+const mockHtml='<html><h1>イチゴスペシャル</h1><div>1個 149円 (税込 160円)</div><h2>商品説明</h2><p>栄養成分 1個当り：エネルギー480kcal、脂質19.2g</p></html>';
+const mockReader='Title: イチゴスペシャル｜西友ネットスーパー\n# イチゴスペシャル\n1個 149円 (税込 160円)\n## 商品説明\n栄養成分 | 1個当り：エネルギー480kcal、脂質19.2g';
+try{
+  let calls=[];
+  globalThis.fetch=async url=>{
+    calls.push(String(url));
+    return new Response(mockHtml,{status:200,headers:{'content-type':'text/html'}});
+  };
+  let r=await seiyuModule.onRequestGet({request:new Request('https://example.test/api/seiyu/product?jan=4903110330523')});
+  let j=await r.json();
+  assert.equal(j.item.name,'イチゴスペシャル');
+  assert.equal(j.item.kcal,480,'Seiyu product kcal must be parsed');
+  assert.equal(j.item.kcalBasis,'1個当り','Serving basis must be retained');
+  assert.equal(j.item.nutritionSource,'西友ネットスーパー');
+  assert.equal(calls.length,1,'Reader must not be called without opt-in');
+
+  calls=[];
+  globalThis.fetch=async url=>{
+    calls.push(String(url));
+    return String(url).startsWith('https://r.jina.ai/')
+      ?new Response(mockReader,{status:200})
+      :new Response('Forbidden',{status:403});
+  };
+  r=await seiyuModule.onRequestGet({request:new Request('https://example.test/api/seiyu/product?jan=4903110330523')});
+  j=await r.json();
+  assert.equal(j.item,null,'without Reader opt-in a blocked site must not be relayed');
+  assert.equal(calls.length,1);
+  r=await seiyuModule.onRequestGet({request:new Request('https://example.test/api/seiyu/product?jan=4903110330523&reader=1')});
+  j=await r.json();
+  assert.equal(j.item.kcal,480,'opted-in Reader fallback must return kcal');
+  assert.equal(j.item.kcalBasis,'1個当り');
+  assert.equal(j.fetchVia,'jina-reader');
+  assert.equal(calls.length,3,'direct fetch plus explicit reader fallback required');
+}finally{
+  globalThis.fetch=originalFetch;
+}
+
+const getRetail=Function(read('functions/api/retail/lookup.js').replace(/export\s+async\s+function/,'async function')+';return extractProduct;')();
+const retailHtml='<html><head><title>イチゴスペシャル</title></head><body><h1>イチゴスペシャル</h1>商品番号4903110330523 栄養成分：1個当り エネルギー480kcal</body></html>';
+const retail=getRetail(retailHtml,'https://example.test/4903110330523',{label:'テスト店',id:'test'},'4903110330523');
+assert.equal(retail.kcal,480,'retailer nutrition must be parsed by exact JAN');
+assert.equal(retail.kcalBasis,'1個当り');
+assert.equal(getRetail(retailHtml,'https://example.test/notfound',{label:'テスト店',id:'test'},'4903110330524'),null,'wrong JAN must be rejected');
+assert.ok(app.includes('||p.kcal==null)&&enabledRetail.length'),'missing kcal must trigger retail requery');
+assert.ok(app.includes('nutritionSourceUrl'),'nutrition source must be present in rendered product');
+
 console.log('smoke: OK');

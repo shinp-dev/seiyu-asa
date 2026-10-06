@@ -69,6 +69,7 @@ function extractProduct(html,sourceUrl,retailer,jan){
   const priceText=taxIncluded||anyPrice||'';
   const netPrice=priceText?Number(priceText.replace(/,/g,'')):null;
   const imageUrl=decodeAttr((raw.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i)||[])[1]||'');
+  const nutrition=extractNutrition(text);
 
   return{
     jan,
@@ -78,6 +79,10 @@ function extractProduct(html,sourceUrl,retailer,jan){
     quantity:'',
     netPrice:Number.isFinite(netPrice)?netPrice:null,
     imageUrl,
+    kcal:nutrition.kcal,
+    kcalBasis:nutrition.kcalBasis,
+    nutritionSource:nutrition.kcal!=null?retailer.label:'',
+    nutritionSourceUrl:nutrition.kcal!=null?sourceUrl:'',
     retailer:retailer.label,
     retailerId:retailer.id,
     source:'retail',
@@ -101,6 +106,7 @@ function extractReaderProduct(body,sourceUrl,retailer,jan){
   const priceText=taxIncluded||anyPrice||'';
   const netPrice=priceText?Number(priceText.replace(/,/g,'')):null;
   const quantity=(raw.match(/(?:^|\s)(\d+(?:\.\d+)?\s*(?:g|kg|ml|mL|L|個|本|袋|枚|食))(?:\s|$)/m)||[])[1]||'';
+  const nutrition=extractNutrition(raw);
 
   return{
     jan,
@@ -110,11 +116,30 @@ function extractReaderProduct(body,sourceUrl,retailer,jan){
     quantity,
     netPrice:Number.isFinite(netPrice)?netPrice:null,
     imageUrl:'',
+    kcal:nutrition.kcal,
+    kcalBasis:nutrition.kcalBasis,
+    nutritionSource:nutrition.kcal!=null?retailer.label:'',
+    nutritionSourceUrl:nutrition.kcal!=null?sourceUrl:'',
     retailer:retailer.label,
     retailerId:retailer.id,
     source:'retail',
     sourceUrl
   };
+}
+
+function extractNutrition(text){
+  let pos=0;
+  while((pos=text.indexOf('栄養成分',pos))>=0){
+    const near=text.slice(pos,pos+350);
+    const m=near.match(/(?:エネルギー|熱量)\s*[：:]?\s*(\d+(?:\.\d+)?)\s*kcal/i);
+    if(m){
+      const kcal=Number(m[1]);
+      const basis=(near.slice(0,m.index).match(/((?:1|１)\s*(?:個|包装|袋|食|本|パック)(?:\s*\d+\s*g)?\s*(?:当り|当たり|あたり)|100\s*(?:g|ml)\s*(?:当り|当たり|あたり))/i)||[])[1]||'';
+      if(Number.isFinite(kcal))return{kcal,kcalBasis:basis||'掲載単位を確認'};
+    }
+    pos+=4;
+  }
+  return{kcal:null,kcalBasis:''};
 }
 
 function cleanName(name,label){
