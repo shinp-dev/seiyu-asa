@@ -1,6 +1,6 @@
 const CAT={snack:'お菓子',lunch:'昼メシ',drink:'飲み物'};
 const ICON={snack:'🍫',lunch:'🍙',drink:'🥤'};
-const SOURCE={demo:'デモ',registered:'登録済み',seiyu:'西友ネット',openfoodfacts:'商品DB',retail:'外部ネットスーパー',maker:'メーカー公式',manual:'手入力'};
+const SOURCE={demo:'デモ',registered:'登録済み',seiyu:'西友ネット',openfoodfacts:'商品DB',retail:'外部商品情報',maker:'メーカー公式',manual:'手入力'};
 const REASONS={expensive:'高い',small:'量が足りない',calorie:'カロリーの割に満足しない',taste:'味が好みじゃない',other:'その他'};
 const MAKER_OPTIONS=[
   {id:'yamazaki',prefix:'4903110',label:'ヤマザキ'},
@@ -10,7 +10,8 @@ const MAKER_OPTIONS=[
 const RETAIL_OPTIONS=[
   {id:'beisia',label:'ベイシア'},
   {id:'tokiwa',label:'トキハ'},
-  {id:'youme',label:'ゆめデリバリー'}
+  {id:'youme',label:'ゆめデリバリー'},
+  {id:'rakutenmart',label:'楽天マート'}
 ];
 const SEED=[
 {id:'s1',jan:'4900000000016',name:'クリームパン',category:'snack',storePrice:138,netPrice:158,kcal:356,source:'demo'},
@@ -112,19 +113,25 @@ function retailOptedInIds(){
 
 function sanitizeCachedProduct(p){
   if(!p)return p;
-  const badMakerName=p.source==='maker'&&/サイト内検索|検索結果|site\s*search/i.test(p.name||'');
-  if(!badMakerName)return p;
-  return Object.assign({},p,{
-    name:'未登録商品',
-    brand:'',
-    manufacturer:'',
-    kcal:null,
-    kcalBasis:'',
-    quantity:'',
-    imageUrl:'',
-    source:'manual',
-    sourceUrl:''
-  });
+  let out=Object.assign({},p);
+  const badMakerName=out.source==='maker'&&/サイト内検索|検索結果|site\s*search/i.test(out.name||'');
+  if(badMakerName){
+    out=Object.assign(out,{
+      name:'未登録商品',
+      brand:'',
+      manufacturer:'',
+      kcal:null,
+      kcalBasis:'',
+      quantity:'',
+      imageUrl:'',
+      source:'manual',
+      sourceUrl:''
+    });
+  }
+  const url=String(out.sourceUrl||'');
+  const externalRetail=/netsuper\.rakuten\.co\.jp\/beisia|tokiwa-portal\.com|delivery\.youmetown\.com|sm\.rakuten\.co\.jp/i.test(url);
+  if(out.source==='retail'||externalRetail)out.netPrice=null;
+  return out;
 }
 function catalog(){
   const m=new Map(SEED.map(p=>[p.id,p]));
@@ -222,8 +229,8 @@ function card(p,opts){
   const d=priceDelta(p);
   const reason=lastReason(p.id);
   const priceLine=p.storePrice!=null
-    ?'店頭 '+yen(p.storePrice)+(p.netPrice!=null?' / ネット '+yen(p.netPrice)+(d!==null?' ('+(d>=0?'+':'')+Math.round(d)+'円)':''):'')
-    :(p.netPrice!=null?'ネット参考 '+yen(p.netPrice)+' / 店頭未登録':'価格未登録');
+    ?'店頭 '+yen(p.storePrice)+(p.netPrice!=null?' / 西友ネット '+yen(p.netPrice)+(d!==null?' ('+(d>=0?'+':'')+Math.round(d)+'円)':''):'')
+    :(p.netPrice!=null?'西友ネット '+yen(p.netPrice)+' / 店頭未登録':'価格未登録');
   const mainPrice=opts.preferNet&&p.storePrice==null?p.netPrice:p.storePrice;
   return '<article class="product card '+(ng(p.id)?'is-ng':'')+'">'+
     '<div class="ico">'+ICON[p.category]+'</div>'+
@@ -272,7 +279,7 @@ function todayInsight(ps,price,cal,base){
     const d=priceDelta(p);
     return a+(d!=null&&d>0?d:0);
   },0);
-  if(netSaved>0)parts.push('ネット参考より合計'+yen(netSaved)+'安め');
+  if(netSaved>0)parts.push('西友ネットより合計'+yen(netSaved)+'安め');
   const fresh=ps.filter(p=>p.source!=='demo'&&eatenCount(p.id)===0).length;
   if(fresh>0)parts.push('初めての商品 '+fresh+'つ');
   return parts.slice(0,2).join(' / ')||'好きな1品は固定して、残りだけ整えています';
@@ -300,7 +307,7 @@ function renderToday(){
     '</div><select id="fixed">'+categoryCandidates(S.focus,false).map(p=>'<option value="'+p.id+'" '+(p.id===S.fixed?'selected':'')+'>'+esc(p.name)+(p.source==='demo'?' (DEMO)':'')+'</option>').join('')+'</select></section>'+
   '<div class="title"><h3>今日のセット</h3><button id="reroll">別のセット</button></div>'+
   ps.map(p=>card(p)).join('')+
-  '<section class="summary"><small>合計'+(hasNetEstimate?'（ネット参考含む）':'')+(hasUnknownPrice?'（価格未登録あり）':'')+'</small><strong>'+yen(price)+' / '+kc(cal)+'</strong><div class="insight">'+esc(insight)+'</div>'+comparison+
+  '<section class="summary"><small>合計'+(hasNetEstimate?'（西友ネット参考含む）':'')+(hasUnknownPrice?'（価格未登録あり）':'')+'</small><strong>'+yen(price)+' / '+kc(cal)+'</strong><div class="insight">'+esc(insight)+'</div>'+comparison+
     '<p>'+CAT[S.focus]+'は固定。NG商品と最近食べたものを避けながら、残りを提案しています。</p></section>'+
   '<button class="primary" id="accept">これでいく</button>'+
   '<button class="secondary" data-jump="scan">店頭の商品をスキャンして比べる</button>';
@@ -344,9 +351,9 @@ function accept(){
 
 function renderOptions(){
   return '<section class="hero"><small>外部問い合わせ</small><h2>商品情報の検索先</h2><p>すべてOFFが初期値です。西友・商品DBで見つからない時だけ、ONにした検索先へJANを送ります。</p></section>'+
-  '<div class="title"><h3>ネットスーパー</h3><span>JAN完全一致だけ採用</span></div>'+
+  '<div class="title"><h3>外部商品ページ</h3><span>商品名・栄養だけ / 価格には使わない</span></div>'+
   '<section class="card settings">'+
-    RETAIL_OPTIONS.map(m=>'<label class="setting-row"><span><b>'+esc(m.label)+'</b><small>JANを公開商品ページへ送信</small></span><input type="checkbox" data-retail-optin="'+esc(m.id)+'" '+(S.retailOptIns[m.id]?'checked':'')+'></label>').join('')+
+    RETAIL_OPTIONS.map(m=>'<label class="setting-row"><span><b>'+esc(m.label)+'</b><small>JANを商品情報の照合に使用（価格は採用しない）</small></span><input type="checkbox" data-retail-optin="'+esc(m.id)+'" '+(S.retailOptIns[m.id]?'checked':'')+'></label>').join('')+
   '</section>'+
   '<div class="title"><h3>ページ取得補助</h3><span>必要な時だけ</span></div>'+
   '<section class="card settings">'+
@@ -356,7 +363,7 @@ function renderOptions(){
   '<div class="title"><h3>メーカー公式</h3><span>補助検索</span></div>'+
   '<section class="card settings">'+
     MAKER_OPTIONS.map(m=>'<label class="setting-row"><span><b>'+esc(m.label)+'</b><small>JANをメーカー公式の検索へ送信</small></span><input type="checkbox" data-maker-optin="'+esc(m.id)+'" '+(S.makerOptIns[m.id]?'checked':'')+'></label>').join('')+
-    '<p class="mini-note privacy-note">OFFの検索先には問い合わせません。設定はこの端末内にだけ保存します。外部ネットスーパーは商品ページ内に同じJANがある場合だけ商品名を採用します。</p>'+
+    '<p class="mini-note privacy-note">OFFの検索先には問い合わせません。設定はこの端末内にだけ保存します。外部商品ページはJAN完全一致の商品名・栄養情報だけを補完し、表示価格には使いません。</p>'+
   '</section>';
 }
 
@@ -391,8 +398,8 @@ async function runNameSearch(q){
 
 function manualLookupHint(p){
   const notes=[];
-  if(p.retailAttempted&&p.retailAttempted.length)notes.push('ONにした外部ネットスーパーでもJAN完全一致が見つかりませんでした。');
-  else if(p.retailOptInAvailable)notes.push('外部ネットスーパー検索は設定でOFFです。ONにすると次回から照会します。');
+  if(p.retailAttempted&&p.retailAttempted.length)notes.push('ONにした外部商品ページでもJAN完全一致が見つかりませんでした。');
+  else if(p.retailOptInAvailable)notes.push('外部商品ページ検索は設定でOFFです。ONにすると次回から照会します。');
   if(p.maker&&p.maker.lookupUrl)notes.push((p.maker.brand||'メーカー')+'公式でも商品名までは特定できませんでした。');
   else if(p.makerOptInAvailable)notes.push(p.makerOptInAvailable.label+'公式への問い合わせは設定でOFFです。');
   return notes.join(' ')||'このJANは外部商品情報から特定できませんでした。商品名と店頭価格を一度保存すれば、次回から端末内で即座に呼び出せます。';
@@ -423,10 +430,10 @@ function scanResult(r){
       (p.manufacturer?'<small>'+esc(p.manufacturer)+'</small>':'')+
       '</div></div>'+
     '<div class="metrics"><div><small>店頭</small><b>'+yen(p.storePrice)+'</b></div>'+
-    '<div><small>ネット参考</small><b>'+yen(p.netPrice)+'</b></div>'+
+    '<div><small>西友ネット</small><b>'+yen(p.netPrice)+'</b></div>'+
     '<div><small>kcal</small><b>'+kc(p.kcal)+'</b>'+(p.kcalBasis?'<em>'+esc(p.kcalBasis)+'</em>':'')+'</div></div>'+
     (p.kcal!=null&&p.nutritionSourceUrl?'<p class="mini-note">栄養情報：<a target="_blank" rel="noreferrer" href="'+esc(p.nutritionSourceUrl)+'">'+esc(p.nutritionSource||'掲載元')+'</a>（パッケージ表示を優先）</p>':'')+
-    (d!==null?'<p class="callout">'+(d>=0?'店頭のほうが '+yen(d)+' 安い':'ネット参考のほうが '+yen(Math.abs(d))+' 安い')+'</p>':'<p class="hint">店頭価格を登録するとネット参考価格との差額を出せます。</p>')+
+    (d!==null?'<p class="callout">'+(d>=0?'店頭のほうが '+yen(d)+' 安い':'西友ネットのほうが '+yen(Math.abs(d))+' 安い')+'</p>':'<p class="hint">店頭価格を登録すると西友ネット価格との差額を出せます。</p>')+
     (p.sourceUrl?'<a class="source-link" target="_blank" rel="noreferrer" href="'+esc(p.sourceUrl)+'">情報元を確認 →</a>':'')+
     (p.maker&&p.maker.lookupUrl?'<a class="source-link" target="_blank" rel="noreferrer" href="'+esc(p.maker.lookupUrl)+'">'+esc(p.maker.brand)+'公式で確認 →</a>':'')+
     (p.jan?'<button class="stock-link" data-stock-jan="'+esc(p.jan)+'">西友の店舗在庫を確認</button>':'')+
@@ -436,7 +443,7 @@ function scanResult(r){
   '</section>';
 
   if(r.seiyu&&r.seiyu.length){
-    html+='<div class="title"><h3>西友ネット候補</h3><span>見学ページ参考価格</span></div>'+
+    html+='<div class="title"><h3>西友ネット候補</h3><span>西友ネット参考価格</span></div>'+
       r.seiyu.map(x=>'<article class="hit card"><a target="_blank" rel="noreferrer" href="'+esc(x.url)+'"><div><b>'+esc(x.name)+'</b><small>'+esc(x.size||'')+'</small></div><strong>'+yen(x.taxIncludedPrice||x.price)+'</strong></a>'+(x.jan?'<button data-lookup-jan="'+esc(x.jan)+'">詳しく見る</button>':'')+'</article>').join('');
   }else if(p.name&&!/^JAN /.test(p.name)){
     html+='<a class="searchlink" target="_blank" rel="noreferrer" href="'+seiyuUrl(p.name)+'">西友ネットスーパーで名前検索 →</a>';
@@ -451,7 +458,7 @@ function scanResult(r){
   if(alt.length)html+='<div class="title"><h3>手元の候補</h3><span>同カテゴリ</span></div>'+alt.map(x=>card(x,{choose:true})).join('');
   html+='<button class="secondary find-alts" id="find-alts">'+((r.alternatives&&r.alternatives.length)?'西友の別候補を更新':'西友で代わりを探す')+'</button>';
   if(r.alternatives&&r.alternatives.length){
-    html+='<div class="title"><h3>西友で代わりにこれ</h3><span>ネット参考価格</span></div>'+
+    html+='<div class="title"><h3>西友で代わりにこれ</h3><span>西友ネット参考価格</span></div>'+
       r.alternatives.map(x=>card(x,{choose:true,preferNet:true})).join('');
   }
   return html;
@@ -462,7 +469,7 @@ function registerForm(p){
     '<label class="wide">商品名<input name="name" value="'+esc(p.name)+'"></label>'+
     '<label>種類<select name="category">'+Object.keys(CAT).map(c=>'<option value="'+c+'" '+(p.category===c?'selected':'')+'>'+CAT[c]+'</option>').join('')+'</select></label>'+
     '<label>店頭価格<input name="storePrice" type="number" min="0" inputmode="numeric" value="'+(p.storePrice==null?'':p.storePrice)+'"></label>'+
-    '<label>ネット参考<input name="netPrice" type="number" min="0" inputmode="numeric" value="'+(p.netPrice==null?'':p.netPrice)+'"></label>'+
+    '<label>西友ネット<input name="netPrice" type="number" min="0" inputmode="numeric" value="'+(p.netPrice==null?'':p.netPrice)+'"></label>'+
     '<label>kcal<input name="kcal" type="number" min="0" inputmode="numeric" value="'+(p.kcal==null?'':Math.round(p.kcal))+'"></label>'+
     '<button class="primary small">この内容で保存</button></form>';
 }
@@ -636,7 +643,7 @@ async function lookupJan(raw){
         manufacturer:x.manufacturer||(p&&p.manufacturer)||'',
         category:(p&&p.category)||inferCategory(x),
         storePrice:p&&p.storePrice!=null?p.storePrice:null,
-        netPrice:x.netPrice!=null?x.netPrice:(p&&p.netPrice!=null?p.netPrice:null),
+        netPrice:p&&p.netPrice!=null?p.netPrice:null,
         kcal:p&&p.kcal!=null?p.kcal:(x.kcal!=null?x.kcal:null),
         kcalBasis:(p&&p.kcalBasis)||(x.kcalBasis||''),
         nutritionSource:(p&&p.kcal!=null&&p.nutritionSource)?p.nutritionSource:(x.nutritionSource||''),
@@ -840,7 +847,7 @@ function historyItem(h){
      '<button data-fb="ng" data-id="'+h.id+'" class="'+(h.feedback==='ng'?'danger':'')+'">もう買わない</button>'
     :'';
   return '<article class="card hist">'+
-    '<div class="hist-main"><div><b>'+esc(h.name)+'</b><small>'+CAT[h.category]+' / '+yen(h.price)+(h.priceSource==='net'?'（ネット参考）':'')+' / '+kc(h.kcal)+(h.priceSource!=='net'&&h.netPrice!=null&&h.price!=null&&Number(h.netPrice)>Number(h.price)?' / ネットより'+yen(Number(h.netPrice)-Number(h.price))+'安い':'')+'</small></div>'+
+    '<div class="hist-main"><div><b>'+esc(h.name)+'</b><small>'+CAT[h.category]+' / '+yen(h.price)+(h.priceSource==='net'?'（西友ネット）':'')+' / '+kc(h.kcal)+(h.priceSource!=='net'&&h.netPrice!=null&&h.price!=null&&Number(h.netPrice)>Number(h.price)?' / 西友ネットより'+yen(Number(h.netPrice)-Number(h.price))+'安い':'')+'</small></div>'+
     '<button class="remove" data-remove="'+h.id+'" aria-label="履歴から削除">×</button></div>'+
     '<div class="actions">'+
       (h.status==='planned'?'<button data-eat="'+h.id+'">食べた</button>':'<span>食べた</span>')+
@@ -883,7 +890,7 @@ function productDetailCard(p){
       (ng(p.id)?'<span class="badge bad">NG</span>':'')+
       '<h3>'+esc(p.name)+'</h3></div><div class="dict-price"><b>'+yen(p.storePrice)+'</b><small>'+kc(p.kcal)+'</small></div></div>'+
     '<div class="dict-metrics"><span>提案 '+x.proposed+'回</span><span>採用 '+x.selected+'回</span><span>選ばれ率 '+rate+'%</span><span>食べた '+eatenCount(p.id)+'回</span></div>'+
-    (d!==null?'<p class="price-note">ネット参考 '+yen(p.netPrice)+' / 差 '+signed(d,'円')+'</p>':'')+
+    (d!==null?'<p class="price-note">西友ネット '+yen(p.netPrice)+' / 差 '+signed(d,'円')+'</p>':'')+
     (reason?'<p class="reason">後悔メモ: '+esc(reason.reason)+'</p>':'')+
     '<div class="dict-actions">'+(ng(p.id)?'<button data-unng="'+esc(p.id)+'">NG解除</button>':'')+
       (p.jan?'<button data-rescan="'+esc(p.jan)+'">このJANを確認</button>':'')+'</div>'+
