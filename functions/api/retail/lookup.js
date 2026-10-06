@@ -13,6 +13,11 @@ const RETAILERS=[
     id:'youme',
     label:'ゆめデリバリー',
     url:jan=>'https://delivery.youmetown.com/shop/g/g'+encodeURIComponent(jan)+'/'
+  },
+  {
+    id:'rakutenmart',
+    label:'楽天マート',
+    url:jan=>'https://sm.rakuten.co.jp/item/'+encodeURIComponent(jan)
   }
 ];
 
@@ -64,10 +69,6 @@ function extractProduct(html,sourceUrl,retailer,jan){
   if(!name)return null;
 
   const text=clean(raw);
-  const taxIncluded=(text.match(/税込[^0-9]{0,25}([0-9][0-9,]*(?:\.[0-9]+)?)\s*円/i)||[])[1];
-  const anyPrice=(text.match(/([0-9][0-9,]*(?:\.[0-9]+)?)\s*円/)||[])[1];
-  const priceText=taxIncluded||anyPrice||'';
-  const netPrice=priceText?Number(priceText.replace(/,/g,'')):null;
   const imageUrl=decodeAttr((raw.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i)||[])[1]||'');
   const nutrition=extractNutrition(text);
 
@@ -77,7 +78,6 @@ function extractProduct(html,sourceUrl,retailer,jan){
     brand:'',
     manufacturer:'',
     quantity:'',
-    netPrice:Number.isFinite(netPrice)?netPrice:null,
     imageUrl,
     kcal:nutrition.kcal,
     kcalBasis:nutrition.kcalBasis,
@@ -101,10 +101,6 @@ function extractReaderProduct(body,sourceUrl,retailer,jan){
   const name=cleanName(heading||titleLine,retailer.label);
   if(!name)return null;
 
-  const taxIncluded=(raw.match(/税込[^0-9]{0,30}([0-9][0-9,]*(?:\.[0-9]+)?)\s*円/i)||[])[1];
-  const anyPrice=(raw.match(/([0-9][0-9,]*(?:\.[0-9]+)?)\s*円/)||[])[1];
-  const priceText=taxIncluded||anyPrice||'';
-  const netPrice=priceText?Number(priceText.replace(/,/g,'')):null;
   const quantity=(raw.match(/(?:^|\s)(\d+(?:\.\d+)?\s*(?:g|kg|ml|mL|L|個|本|袋|枚|食))(?:\s|$)/m)||[])[1]||'';
   const nutrition=extractNutrition(raw);
 
@@ -114,7 +110,6 @@ function extractReaderProduct(body,sourceUrl,retailer,jan){
     brand:'',
     manufacturer:'',
     quantity,
-    netPrice:Number.isFinite(netPrice)?netPrice:null,
     imageUrl:'',
     kcal:nutrition.kcal,
     kcalBasis:nutrition.kcalBasis,
