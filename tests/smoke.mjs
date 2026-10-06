@@ -34,6 +34,8 @@ assert.ok(app.includes('runNameSearch'),'Seiyu product-name search fallback miss
 assert.ok(app.includes('monthDecisionSummary'),'what-if monthly summary missing');
 assert.ok(app.includes('data-stock-jan'),'official Seiyu stock lookup missing');
 assert.ok(app.includes('productQuery'),'product dictionary search missing');
+assert.ok(app.includes('sanitizeCachedProduct'),'stale cached product sanitizer missing');
+assert.ok(app.includes('/サイト内検索|検索結果|site\\s*search/i'),'legacy maker false-positive cleanup missing');
 assert.ok(app.includes('alternativeScore'),'alternative ranking missing');
 assert.ok(app.includes('recDate'),'daily recommendation refresh missing');
 assert.ok(!app.includes('KNOWN_PRODUCTS'),'hardcoded product dictionary must not be bundled');
