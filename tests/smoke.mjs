@@ -35,6 +35,9 @@ assert.ok(app.includes('monthDecisionSummary'),'what-if monthly summary missing'
 assert.ok(app.includes('data-stock-jan'),'official Seiyu stock lookup missing');
 assert.ok(app.includes('productQuery'),'product dictionary search missing');
 assert.ok(app.includes('sanitizeCachedProduct'),'stale cached product sanitizer missing');
+assert.ok(app.includes("p.netPriceSource!=='seiyu'"),'legacy other-store prices must be excluded');
+assert.ok(app.includes("hit=seiyu.find(x=>x.jan===jan)"),'Seiyu name-search prices require exact JAN');
+assert.ok(!app.includes("netPrice:x.netPrice!=null?x.netPrice"),'external retailer must never provide the net reference price');
 assert.ok(app.includes('/サイト内検索|検索結果|site\\s*search/i'),'legacy maker false-positive cleanup missing');
 assert.ok(app.includes('alternativeScore'),'alternative ranking missing');
 assert.ok(app.includes('recDate'),'daily recommendation refresh missing');
@@ -107,12 +110,22 @@ try{
 }
 
 const getRetail=Function(read('functions/api/retail/lookup.js').replace(/export\s+async\s+function/,'async function')+';return extractProduct;')();
-const retailHtml='<html><head><title>イチゴスペシャル</title></head><body><h1>イチゴスペシャル</h1>商品番号4903110330523 栄養成分：1個当り エネルギー480kcal</body></html>';
+const retailHtml='<html><head><title>イチゴスペシャル</title></head><body><h1>イチゴスペシャル</h1>商品番号4903110330523 税込160円 栄養成分：1個当り エネルギー480kcal</body></html>';
 const retail=getRetail(retailHtml,'https://example.test/4903110330523',{label:'テスト店',id:'test'},'4903110330523');
 assert.equal(retail.kcal,480,'retailer nutrition must be parsed by exact JAN');
+assert.equal(retail.netPrice,null,'retailer price must be ignored even when item is identified');
 assert.equal(retail.kcalBasis,'1個当り');
 assert.equal(getRetail(retailHtml,'https://example.test/notfound',{label:'テスト店',id:'test'},'4903110330524'),null,'wrong JAN must be rejected');
 assert.ok(app.includes('||p.kcal==null)&&enabledRetail.length'),'missing kcal must trigger retail requery');
 assert.ok(app.includes('nutritionSourceUrl'),'nutrition source must be present in rendered product');
 
+const sanitizeSource=app.match(/function sanitizeCachedProduct\(p\)\{[\s\S]*?\n\}/);
+assert.ok(sanitizeSource,'cached product sanitizer must exist');
+const sanitize=Function(sanitizeSource[0]+';return sanitizeCachedProduct;')();
+assert.equal(sanitize({name:'商品A',source:'retail',retailer:'ベイシア',netPrice:160,kcal:480}).netPrice,null,'previously cached retailer prices must be cleared');
+assert.equal(sanitize({name:'商品A',source:'registered',retailer:'トキハ',netPrice:165,kcal:480}).netPrice,null,'retailer prices must also clear after source conversion');
+assert.equal(sanitize({name:'商品A',source:'retail',retailer:'トキハ',netPrice:193,netPriceSource:'seiyu'}).netPrice,193,'known Seiyu prices must remain');
+assert.equal(sanitize({name:'商品A',source:'registered',netPrice:195,netPriceSource:'manual'}).netPrice,195,'manual reference prices must remain');
+assert.ok(!retailLookup.includes('priceText'),'retailer parser must not extract prices');
+assert.equal((retailLookup.match(/netPrice:null/g)||[]).length,2,'both retailer parsing routes must not return other-store prices');
 console.log('smoke: OK');

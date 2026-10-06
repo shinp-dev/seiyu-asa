@@ -112,6 +112,11 @@ function retailOptedInIds(){
 
 function sanitizeCachedProduct(p){
   if(!p)return p;
+  // Earlier versions inadvertently saved external retailer prices in netPrice.
+  // Preserve a manual entry or verified Seiyu price, but never an imported other-store price.
+  const importedRetailPrice=(p.source==='retail'||!!p.retailer)
+    &&p.netPriceSource!=='seiyu'&&p.netPriceSource!=='manual';
+  if(importedRetailPrice)p=Object.assign({},p,{netPrice:null,netPriceSource:null});
   const badMakerName=p.source==='maker'&&/サイト内検索|検索結果|site\s*search/i.test(p.name||'');
   if(!badMakerName)return p;
   return Object.assign({},p,{
@@ -128,10 +133,14 @@ function sanitizeCachedProduct(p){
 }
 function catalog(){
   const m=new Map(SEED.map(p=>[p.id,p]));
-  read(K.catalog,[]).forEach(p=>m.set(p.id,sanitizeCachedProduct(p)));
+  const saved=read(K.catalog,[]);
+  const sanitized=saved.map(sanitizeCachedProduct);
+  if(sanitized.some((p,i)=>p!==saved[i]))write(K.catalog,sanitized);
+  sanitized.forEach(p=>m.set(p.id,p));
   return Array.from(m.values());
 }
 function saveProduct(p){
+  p=sanitizeCachedProduct(p);
   const a=read(K.catalog,[]);
   const i=a.findIndex(x=>x.id===p.id||(p.jan&&x.jan===p.jan));
   if(i>=0)a[i]=Object.assign({},a[i],p);
@@ -222,8 +231,8 @@ function card(p,opts){
   const d=priceDelta(p);
   const reason=lastReason(p.id);
   const priceLine=p.storePrice!=null
-    ?'店頭 '+yen(p.storePrice)+(p.netPrice!=null?' / ネット '+yen(p.netPrice)+(d!==null?' ('+(d>=0?'+':'')+Math.round(d)+'円)':''):'')
-    :(p.netPrice!=null?'ネット参考 '+yen(p.netPrice)+' / 店頭未登録':'価格未登録');
+    ?'店頭 '+yen(p.storePrice)+(p.netPrice!=null?' / 西友ネット '+yen(p.netPrice)+(d!==null?' ('+(d>=0?'+':'')+Math.round(d)+'円)':''):'')
+    :(p.netPrice!=null?'西友ネット参考 '+yen(p.netPrice)+' / 店頭未登録':'価格未登録');
   const mainPrice=opts.preferNet&&p.storePrice==null?p.netPrice:p.storePrice;
   return '<article class="product card '+(ng(p.id)?'is-ng':'')+'">'+
     '<div class="ico">'+ICON[p.category]+'</div>'+
@@ -272,7 +281,7 @@ function todayInsight(ps,price,cal,base){
     const d=priceDelta(p);
     return a+(d!=null&&d>0?d:0);
   },0);
-  if(netSaved>0)parts.push('ネット参考より合計'+yen(netSaved)+'安め');
+  if(netSaved>0)parts.push('西友ネット参考より合計'+yen(netSaved)+'安め');
   const fresh=ps.filter(p=>p.source!=='demo'&&eatenCount(p.id)===0).length;
   if(fresh>0)parts.push('初めての商品 '+fresh+'つ');
   return parts.slice(0,2).join(' / ')||'好きな1品は固定して、残りだけ整えています';
@@ -300,7 +309,7 @@ function renderToday(){
     '</div><select id="fixed">'+categoryCandidates(S.focus,false).map(p=>'<option value="'+p.id+'" '+(p.id===S.fixed?'selected':'')+'>'+esc(p.name)+(p.source==='demo'?' (DEMO)':'')+'</option>').join('')+'</select></section>'+
   '<div class="title"><h3>今日のセット</h3><button id="reroll">別のセット</button></div>'+
   ps.map(p=>card(p)).join('')+
-  '<section class="summary"><small>合計'+(hasNetEstimate?'（ネット参考含む）':'')+(hasUnknownPrice?'（価格未登録あり）':'')+'</small><strong>'+yen(price)+' / '+kc(cal)+'</strong><div class="insight">'+esc(insight)+'</div>'+comparison+
+  '<section class="summary"><small>合計'+(hasNetEstimate?'（西友ネット参考含む）':'')+(hasUnknownPrice?'（価格未登録あり）':'')+'</small><strong>'+yen(price)+' / '+kc(cal)+'</strong><div class="insight">'+esc(insight)+'</div>'+comparison+
     '<p>'+CAT[S.focus]+'は固定。NG商品と最近食べたものを避けながら、残りを提案しています。</p></section>'+
   '<button class="primary" id="accept">これでいく</button>'+
   '<button class="secondary" data-jump="scan">店頭の商品をスキャンして比べる</button>';
@@ -344,7 +353,7 @@ function accept(){
 
 function renderOptions(){
   return '<section class="hero"><small>外部問い合わせ</small><h2>商品情報の検索先</h2><p>すべてOFFが初期値です。西友・商品DBで見つからない時だけ、ONにした検索先へJANを送ります。</p></section>'+
-  '<div class="title"><h3>ネットスーパー</h3><span>JAN完全一致だけ採用</span></div>'+
+  '<div class="title"><h3>ネットスーパー</h3><span>商品名・栄養情報のみ</span></div>'+
   '<section class="card settings">'+
     RETAIL_OPTIONS.map(m=>'<label class="setting-row"><span><b>'+esc(m.label)+'</b><small>JANを公開商品ページへ送信</small></span><input type="checkbox" data-retail-optin="'+esc(m.id)+'" '+(S.retailOptIns[m.id]?'checked':'')+'></label>').join('')+
   '</section>'+
@@ -356,7 +365,7 @@ function renderOptions(){
   '<div class="title"><h3>メーカー公式</h3><span>補助検索</span></div>'+
   '<section class="card settings">'+
     MAKER_OPTIONS.map(m=>'<label class="setting-row"><span><b>'+esc(m.label)+'</b><small>JANをメーカー公式の検索へ送信</small></span><input type="checkbox" data-maker-optin="'+esc(m.id)+'" '+(S.makerOptIns[m.id]?'checked':'')+'></label>').join('')+
-    '<p class="mini-note privacy-note">OFFの検索先には問い合わせません。設定はこの端末内にだけ保存します。外部ネットスーパーは商品ページ内に同じJANがある場合だけ商品名を採用します。</p>'+
+    '<p class="mini-note privacy-note">OFFの検索先には問い合わせません。設定はこの端末内にだけ保存します。外部ネットスーパーはJANが一致する商品名・栄養情報だけを参照します。他店価格は利用せず、比較価格は西友ネットスーパーのみです。</p>'+
   '</section>';
 }
 
@@ -422,8 +431,8 @@ function scanResult(r){
       (p.quantity?'<small>'+esc(p.quantity)+'</small>':'')+
       (p.manufacturer?'<small>'+esc(p.manufacturer)+'</small>':'')+
       '</div></div>'+
-    '<div class="metrics"><div><small>店頭</small><b>'+yen(p.storePrice)+'</b></div>'+
-    '<div><small>ネット参考</small><b>'+yen(p.netPrice)+'</b></div>'+
+    '<div class="metrics"><div><small>西友店頭</small><b>'+yen(p.storePrice)+'</b></div>'+
+    '<div><small>西友ネット参考</small><b>'+yen(p.netPrice)+'</b></div>'+
     '<div><small>kcal</small><b>'+kc(p.kcal)+'</b>'+(p.kcalBasis?'<em>'+esc(p.kcalBasis)+'</em>':'')+'</div></div>'+
     (p.kcal!=null&&p.nutritionSourceUrl?'<p class="mini-note">栄養情報：<a target="_blank" rel="noreferrer" href="'+esc(p.nutritionSourceUrl)+'">'+esc(p.nutritionSource||'掲載元')+'</a>（パッケージ表示を優先）</p>':'')+
     (d!==null?'<p class="callout">'+(d>=0?'店頭のほうが '+yen(d)+' 安い':'ネット参考のほうが '+yen(Math.abs(d))+' 安い')+'</p>':'<p class="hint">店頭価格を登録するとネット参考価格との差額を出せます。</p>')+
@@ -462,7 +471,7 @@ function registerForm(p){
     '<label class="wide">商品名<input name="name" value="'+esc(p.name)+'"></label>'+
     '<label>種類<select name="category">'+Object.keys(CAT).map(c=>'<option value="'+c+'" '+(p.category===c?'selected':'')+'>'+CAT[c]+'</option>').join('')+'</select></label>'+
     '<label>店頭価格<input name="storePrice" type="number" min="0" inputmode="numeric" value="'+(p.storePrice==null?'':p.storePrice)+'"></label>'+
-    '<label>ネット参考<input name="netPrice" type="number" min="0" inputmode="numeric" value="'+(p.netPrice==null?'':p.netPrice)+'"></label>'+
+    '<label>西友ネット参考<input name="netPrice" type="number" min="0" inputmode="numeric" value="'+(p.netPrice==null?'':p.netPrice)+'"></label>'+
     '<label>kcal<input name="kcal" type="number" min="0" inputmode="numeric" value="'+(p.kcal==null?'':Math.round(p.kcal))+'"></label>'+
     '<button class="primary small">この内容で保存</button></form>';
 }
@@ -570,7 +579,8 @@ async function lookupJan(raw){
       name:sj.item.name||(p&&p.name)||('JAN '+jan),
       category:(p&&p.category)||inferCategory({name:sj.item.name,quantity:sj.item.size}),
       storePrice:p&&p.storePrice!=null?p.storePrice:null,
-      netPrice:sj.item.taxIncludedPrice||sj.item.price||(p&&p.netPrice)||null,
+      netPrice:sj.item.taxIncludedPrice??sj.item.price??(p&&p.netPrice!=null?p.netPrice:null),
+      netPriceSource:sj.item.taxIncludedPrice!=null||sj.item.price!=null?'seiyu':((p&&p.netPriceSource)||null),
       kcal:sj.item.kcal!=null?sj.item.kcal:(p&&p.kcal!=null?p.kcal:null),
       kcalBasis:sj.item.kcalBasis||(p&&p.kcalBasis)||'',
       nutritionSource:sj.item.kcal!=null?'西友ネットスーパー':((p&&p.nutritionSource)||''),
@@ -636,7 +646,8 @@ async function lookupJan(raw){
         manufacturer:x.manufacturer||(p&&p.manufacturer)||'',
         category:(p&&p.category)||inferCategory(x),
         storePrice:p&&p.storePrice!=null?p.storePrice:null,
-        netPrice:x.netPrice!=null?x.netPrice:(p&&p.netPrice!=null?p.netPrice:null),
+        netPrice:p&&p.netPrice!=null?p.netPrice:null,
+        netPriceSource:p&&p.netPriceSource||null,
         kcal:p&&p.kcal!=null?p.kcal:(x.kcal!=null?x.kcal:null),
         kcalBasis:(p&&p.kcalBasis)||(x.kcalBasis||''),
         nutritionSource:(p&&p.kcal!=null&&p.nutritionSource)?p.nutritionSource:(x.nutritionSource||''),
@@ -700,9 +711,16 @@ async function lookupJan(raw){
     p.retailAttempted=retailAttempted;
   }
   p.category=p.category&&CAT[p.category]?p.category:inferCategory(p);
-  if(p.source!=='demo'&&p.source!=='manual'&&!/^JAN /.test(p.name))saveProduct(p);
-
   const seiyu=exactSeiyu||p.source==='manual'?[]:await searchSeiyu(p.name);
+  // A Seiyu name-search hit is a usable reference price ONLY when the JAN matches.
+  if(p.netPrice==null){
+    const hit=seiyu.find(x=>x.jan===jan);
+    if(hit){
+      p.netPrice=hit.taxIncludedPrice??hit.price??null;
+      if(p.netPrice!=null)p.netPriceSource='seiyu';
+    }
+  }
+  if(p.source!=='demo'&&p.source!=='manual'&&!/^JAN /.test(p.name))saveProduct(p);
   return{product:p,seiyu:seiyu,exactSeiyu:exactSeiyu};
 }
 async function doLookup(jan){
@@ -856,7 +874,7 @@ function renderHistory(){
   const all=history().slice().sort((a,b)=>(b.date||'').localeCompare(a.date||'')||String(b.createdAt||b.id).localeCompare(String(a.createdAt||a.id)));
   const m=monthSummary();
   let html='<section class="hero"><small>後悔も忘れない</small><h2>食べたもの</h2><p>「もう買わない」と理由を残すと、次の朝と店頭スキャンで思い出させます。</p></section>'+
-    '<section class="month-strip"><div><small>今月 食べた朝</small><b>'+m.days+'日</b></div><div><small>記録金額</small><b>'+yen(m.price)+'</b></div><div><small>記録kcal</small><b>'+kc(m.kcal)+'</b></div><div><small>ネットより節約</small><b>'+yen(m.netSaved)+'</b></div><div><small>後悔</small><b>'+m.regrets+'件</b></div></section>'+
+    '<section class="month-strip"><div><small>今月 食べた朝</small><b>'+m.days+'日</b></div><div><small>記録金額</small><b>'+yen(m.price)+'</b></div><div><small>記録kcal</small><b>'+kc(m.kcal)+'</b></div><div><small>西友ネットより節約</small><b>'+yen(m.netSaved)+'</b></div><div><small>後悔</small><b>'+m.regrets+'件</b></div></section>'+
     renderDecisionSummary();
   if(!all.length)return html+'<p class="empty">まだ履歴がありません。</p>';
 
@@ -1073,12 +1091,16 @@ function bind(){
       category:String(d.get('category')),
       storePrice:num(d.get('storePrice')),
       netPrice:num(d.get('netPrice')),
+      netPriceSource:num(d.get('netPrice'))==null?null:
+        (existing.netPriceSource==='seiyu'&&existing.netPrice===num(d.get('netPrice'))?'seiyu':'manual'),
       kcal:num(d.get('kcal')),
       quantity:existing.quantity||'',
       imageUrl:existing.imageUrl||'',
       kcalBasis:existing.kcalBasis||'',
       source:existing.source==='seiyu'?'seiyu':'registered',
-      sourceUrl:existing.sourceUrl||''
+      sourceUrl:existing.sourceUrl||'',
+      nutritionSource:existing.nutritionSource||'',
+      nutritionSourceUrl:existing.nutritionSourceUrl||''
     };
     saveProduct(p);
     recordPrice(p);
