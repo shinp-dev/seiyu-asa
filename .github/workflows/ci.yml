@@ -53,10 +53,75 @@ jobs:
             --commit-hash="${GITHUB_SHA}" \
             --commit-message="${{ github.event.head_commit.message || 'manual deploy' }}"
 
-      - name: Verify kcal for known JAN in production
+      - name: Validate Seiyu nutrition endpoint (best-effort upstream availability)
         run: |
-          node -e "const u='https://seiyu-asa.pages.dev/api/seiyu/product?jan=4903110330523&reader=1'; const wait=ms=>new Promise(r=>setTimeout(r,ms)); (async()=>{for(let i=0;i<3;i++){try{const r=await fetch(u,{cache:'no-store'});const t=await r.text();let j={};try{j=JSON.parse(t)}catch{};if(r.ok&&j.item&&String(j.item.name||'').includes('イチゴスペシャル')&&Number(j.item.kcal)>0&&String(j.item.kcalBasis||'').includes('個')){console.log('nutrition lookup OK: '+j.item.kcal+' kcal '+j.item.kcalBasis+' via '+j.fetchVia);return;}console.error('attempt '+(i+1)+' status='+r.status+' body='+t.slice(0,500))}catch(e){console.error('attempt '+(i+1)+' '+e.message)}await wait(3000)}process.exit(1)})()"
+          node --input-type=module <<'NODE'
+          const url = 'https://seiyu-asa.pages.dev/api/seiyu/product?jan=4903110330523&reader=1';
+          const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+          let gotValidResponse = false;
+          let gotNutrition = false;
+          for (let i = 0; i < 3; i++) {
+            try {
+              const response = await fetch(url, { cache: 'no-store' });
+              if (!response.ok) throw new Error('HTTP ' + response.status);
+              const data = await response.json();
+              if (!Object.hasOwn(data, 'item')) throw new Error('No item field');
+              gotValidResponse = true;
+              if (data.item) {
+                const item = data.item;
+                if (item.jan !== '4903110330523' ||
+                    !String(item.name || '').includes('イチゴスペシャル') ||
+                    !Number.isFinite(Number(item.kcal)) ||
+                    Number(item.kcal) <= 0 ||
+                    !String(item.kcalBasis || '').includes('個')) {
+                  throw new Error('Invalid product response: ' + JSON.stringify(item).slice(0, 300));
+                }
+                console.log('Nutrition endpoint OK: ' + item.kcal + 'kcal via ' + data.fetchVia);
+                gotNutrition = true;
+                break;
+              }
+              console.log('Upstream Seiyu information unavailable (attempt ' + (i + 1) + ')');
+            } catch (error) {
+              if (String(error).includes('Invalid product response')) throw error;
+              console.log('Upstream request issue: ' + error.message);
+            }
+            await wait(2000);
+          }
+          if (!gotValidResponse) process.exit(1);
+          if (!gotNutrition) console.log('::warning::Seiyu upstream returned no nutrition this run; parser is checked in unit tests.');
+          NODE
 
-      - name: Verify retail JAN lookup in production
+      - name: Validate retail JAN lookup and reject external prices
         run: |
-          node -e "const u='https://seiyu-asa.pages.dev/api/retail/lookup?jan=4903110330523&sources=beisia,tokiwa,youme&reader=1'; const wait=ms=>new Promise(r=>setTimeout(r,ms)); (async()=>{for(let i=0;i<3;i++){try{const r=await fetch(u,{cache:'no-store'}); const t=await r.text(); let j={}; try{j=JSON.parse(t)}catch{}; if(r.ok&&j.product&&String(j.product.name||'').includes('イチゴスペシャル')){console.log('retail lookup OK via '+j.product.retailer); return;} console.error('attempt '+(i+1)+' status='+r.status+' body='+t.slice(0,300));}catch(e){console.error('attempt '+(i+1)+' '+e.message)} await wait(3000);} process.exit(1)})()"
+          node --input-type=module <<'NODE'
+          const url = 'https://seiyu-asa.pages.dev/api/retail/lookup?jan=4903110330523&sources=beisia,tokiwa,youme&reader=1';
+          const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+          let gotValidResponse = false;
+          let gotProduct = false;
+          for (let i = 0; i < 3; i++) {
+            try {
+              const response = await fetch(url, { cache: 'no-store' });
+              if (!response.ok) throw new Error('HTTP ' + response.status);
+              const data = await response.json();
+              if (!Object.hasOwn(data, 'product')) throw new Error('No product field');
+              gotValidResponse = true;
+              if (data.product) {
+                if (data.product.jan !== '4903110330523' ||
+                    !String(data.product.name || '').includes('イチゴスペシャル') ||
+                    data.product.netPrice != null) {
+                  throw new Error('Unexpected retailer result: ' + JSON.stringify(data.product).slice(0, 300));
+                }
+                console.log('Retail identity OK, other-store price excluded');
+                gotProduct = true;
+                break;
+              }
+              console.log('Retail upstream unavailable (attempt ' + (i + 1) + ')');
+            } catch (error) {
+              if (String(error).includes('Unexpected retailer result')) throw error;
+              console.log('Upstream request issue: ' + error.message);
+            }
+            await wait(2000);
+          }
+          if (!gotValidResponse) process.exit(1);
+          if (!gotProduct) console.log('::warning::Retail upstream returned no product this run; parser is checked in unit tests.');
+          NODE
