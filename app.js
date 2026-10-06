@@ -518,7 +518,7 @@ async function fetchJson(url,timeout){
   const c=new AbortController();
   const t=setTimeout(()=>c.abort(),timeout||5000);
   try{
-    const r=await fetch(url,{signal:c.signal});
+    const r=await fetch(url,{signal:c.signal,cache:'no-store'});
     if(!r.ok)return null;
     return await r.json();
   }catch(e){return null}
