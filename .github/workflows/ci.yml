@@ -19,7 +19,7 @@ jobs:
       - run: npm run build
       - name: Probe Beisia JAN page
         run: |
-          node -e "fetch('https://netsuper.rakuten.co.jp/beisia/item/4903110330523/').then(async r=>{const t=await r.text(); if(!r.ok||!t.includes('4903110330523')||!t.includes('イチゴスペシャル')){console.error('beisia status='+r.status+' jan='+t.includes('4903110330523')+' name='+t.includes('イチゴスペシャル')); process.exit(1)}})"
+          node -e "fetch('https://netsuper.rakuten.co.jp/beisia/item/4903110330523/',{headers:{'user-agent':'Mozilla/5.0 (Linux; Android 15; Mobile) AppleWebKit/537.36 Chrome/140 Safari/537.36','accept':'text/html,application/xhtml+xml','accept-language':'ja,en-US;q=0.9'}}).then(async r=>{const t=await r.text(); if(!r.ok||!t.includes('4903110330523')||!t.includes('イチゴスペシャル')){console.error('beisia status='+r.status+' jan='+t.includes('4903110330523')+' name='+t.includes('イチゴスペシャル')+' len='+t.length); process.exit(1)}})"
       - name: Probe production retail lookup
         run: |
           node -e "fetch('https://seiyu-asa.pages.dev/api/retail/lookup?jan=4903110330523&sources=beisia,tokiwa,youme').then(async r=>{const t=await r.text(); let j={}; try{j=JSON.parse(t)}catch{}; if(!r.ok||!j.product||!String(j.product.name||'').includes('イチゴスペシャル')){console.error('production status='+r.status+' body='+t.slice(0,500)); process.exit(1)}})"
