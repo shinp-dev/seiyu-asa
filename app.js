@@ -1,11 +1,16 @@
 const CAT={snack:'お菓子',lunch:'昼メシ',drink:'飲み物'};
 const ICON={snack:'🍫',lunch:'🍙',drink:'🥤'};
-const SOURCE={demo:'デモ',registered:'登録済み',seiyu:'西友ネット',openfoodfacts:'商品DB',maker:'メーカー公式',manual:'手入力'};
+const SOURCE={demo:'デモ',registered:'登録済み',seiyu:'西友ネット',openfoodfacts:'商品DB',retail:'外部ネットスーパー',maker:'メーカー公式',manual:'手入力'};
 const REASONS={expensive:'高い',small:'量が足りない',calorie:'カロリーの割に満足しない',taste:'味が好みじゃない',other:'その他'};
 const MAKER_OPTIONS=[
   {id:'yamazaki',prefix:'4903110',label:'ヤマザキ'},
   {id:'fujipan',prefix:'4902410',label:'フジパン'},
   {id:'pasco',prefix:'4901820',label:'Pasco'}
+];
+const RETAIL_OPTIONS=[
+  {id:'beisia',label:'ベイシア'},
+  {id:'tokiwa',label:'トキハ'},
+  {id:'youme',label:'ゆめデリバリー'}
 ];
 const SEED=[
 {id:'s1',jan:'4900000000016',name:'クリームパン',category:'snack',storePrice:138,netPrice:158,kcal:356,source:'demo'},
@@ -41,7 +46,8 @@ const S={
   productQuery:'',
   nameResults:[],
   nameQuery:'',
-  makerOptIns:{}
+  makerOptIns:{},
+  retailOptIns:{}
 };
 
 const $=s=>document.querySelector(s);
@@ -87,15 +93,19 @@ function loadPrefs(){
   if(p.focus&&CAT[p.focus])S.focus=p.focus;
   if(p.fixed)S.fixed=p.fixed;
   S.makerOptIns=p.makerOptIns&&typeof p.makerOptIns==='object'?p.makerOptIns:{};
+  S.retailOptIns=p.retailOptIns&&typeof p.retailOptIns==='object'?p.retailOptIns:{};
 }
 function savePrefs(){
   const prev=read(K.prefs,{});
-  write(K.prefs,Object.assign({},prev,{focus:S.focus,fixed:S.fixed,makerOptIns:S.makerOptIns}));
+  write(K.prefs,Object.assign({},prev,{focus:S.focus,fixed:S.fixed,makerOptIns:S.makerOptIns,retailOptIns:S.retailOptIns}));
 }
 function makerForJan(jan){return MAKER_OPTIONS.find(m=>jan.startsWith(m.prefix))||null}
 function makerOptedIn(jan){
   const maker=makerForJan(jan);
   return !!(maker&&S.makerOptIns&&S.makerOptIns[maker.id]);
+}
+function retailOptedInIds(){
+  return RETAIL_OPTIONS.filter(x=>S.retailOptIns&&S.retailOptIns[x.id]).map(x=>x.id);
 }
 
 function catalog(){
@@ -315,10 +325,15 @@ function accept(){
 }
 
 function renderOptions(){
-  return '<section class="hero"><small>外部問い合わせ</small><h2>メーカー公式を使う企業</h2><p>OFFが初期値です。ONにした企業だけ、JAN検索で西友・商品DBに見つからなかった時にメーカー公式へ問い合わせます。</p></section>'+
+  return '<section class="hero"><small>外部問い合わせ</small><h2>商品情報の検索先</h2><p>すべてOFFが初期値です。西友・商品DBで見つからない時だけ、ONにした検索先へJANを送ります。</p></section>'+
+  '<div class="title"><h3>ネットスーパー</h3><span>JAN完全一致だけ採用</span></div>'+
+  '<section class="card settings">'+
+    RETAIL_OPTIONS.map(m=>'<label class="setting-row"><span><b>'+esc(m.label)+'</b><small>JANを公開商品ページへ送信</small></span><input type="checkbox" data-retail-optin="'+esc(m.id)+'" '+(S.retailOptIns[m.id]?'checked':'')+'></label>').join('')+
+  '</section>'+
+  '<div class="title"><h3>メーカー公式</h3><span>補助検索</span></div>'+
   '<section class="card settings">'+
     MAKER_OPTIONS.map(m=>'<label class="setting-row"><span><b>'+esc(m.label)+'</b><small>JANをメーカー公式の検索へ送信</small></span><input type="checkbox" data-maker-optin="'+esc(m.id)+'" '+(S.makerOptIns[m.id]?'checked':'')+'></label>').join('')+
-    '<p class="mini-note privacy-note">OFFの企業には問い合わせません。設定はこの端末内にだけ保存します。</p>'+
+    '<p class="mini-note privacy-note">OFFの検索先には問い合わせません。設定はこの端末内にだけ保存します。外部ネットスーパーは商品ページ内に同じJANがある場合だけ商品名を採用します。</p>'+
   '</section>';
 }
 
@@ -349,6 +364,15 @@ async function runNameSearch(q){
   S.nameResults=await searchSeiyu(q);
   if(box)box.innerHTML=renderNameResults()||'<p class="empty">候補が見つかりませんでした。</p>';
   bind();
+}
+
+function manualLookupHint(p){
+  const notes=[];
+  if(p.retailAttempted&&p.retailAttempted.length)notes.push('ONにした外部ネットスーパーでもJAN完全一致が見つかりませんでした。');
+  else if(p.retailOptInAvailable)notes.push('外部ネットスーパー検索は設定でOFFです。ONにすると次回から照会します。');
+  if(p.maker&&p.maker.lookupUrl)notes.push((p.maker.brand||'メーカー')+'公式でも商品名までは特定できませんでした。');
+  else if(p.makerOptInAvailable)notes.push(p.makerOptInAvailable.label+'公式への問い合わせは設定でOFFです。');
+  return notes.join(' ')||'このJANは外部商品情報から特定できませんでした。商品名と店頭価格を一度保存すれば、次回から端末内で即座に呼び出せます。';
 }
 
 function scanResult(r){
@@ -382,7 +406,7 @@ function scanResult(r){
     (p.sourceUrl?'<a class="source-link" target="_blank" rel="noreferrer" href="'+esc(p.sourceUrl)+'">情報元を確認 →</a>':'')+
     (p.maker&&p.maker.lookupUrl?'<a class="source-link" target="_blank" rel="noreferrer" href="'+esc(p.maker.lookupUrl)+'">'+esc(p.maker.brand)+'公式で確認 →</a>':'')+
     (p.jan?'<button class="stock-link" data-stock-jan="'+esc(p.jan)+'">西友の店舗在庫を確認</button>':'')+
-    (p.source==='manual'?'<p class="hint">'+(p.makerOptInAvailable?esc(p.makerOptInAvailable.label)+'公式への問い合わせは設定でOFFです。ONにすると次回から公式も照会します。':'このJANは外部商品DBで特定できませんでした。商品名と店頭価格を一度保存すれば、次回から端末内で即座に呼び出せます。')+'</p>':'')+
+    (p.source==='manual'?'<p class="hint">'+esc(manualLookupHint(p))+'</p>':'')+
     registerForm(p)+
     '<button class="secondary" data-use-scan="1">今日の3点でこの商品を優先</button>'+
   '</section>';
@@ -510,6 +534,8 @@ async function lookupJan(raw){
 
   let p=catalog().find(x=>x.jan===jan)||null;
   let exactSeiyu=null;
+  const enabledRetail=retailOptedInIds();
+  let retailAttempted=[];
 
   const sj=await fetchJson('/api/seiyu/product?jan='+encodeURIComponent(jan),5500);
   if(sj&&sj.item){
@@ -571,7 +597,32 @@ async function lookupJan(raw){
     }
   }
 
-  if((!p||!p.name||p.name==='未登録商品')&&makerOptedIn(jan)){
+  if((!p||!p.name||p.name==='未登録商品'||/^JAN /.test(p.name))&&enabledRetail.length){
+    const rj=await fetchJson('/api/retail/lookup?jan='+encodeURIComponent(jan)+'&sources='+encodeURIComponent(enabledRetail.join(',')),6500);
+    retailAttempted=rj&&Array.isArray(rj.attempted)?rj.attempted:enabledRetail;
+    if(rj&&rj.product){
+      const x=rj.product;
+      p=Object.assign({},p||{},{
+        id:(p&&p.id)||('jan-'+jan),
+        jan,
+        name:x.name||(p&&p.name)||'未登録商品',
+        brand:x.brand||(p&&p.brand)||'',
+        manufacturer:x.manufacturer||(p&&p.manufacturer)||'',
+        category:(p&&p.category)||inferCategory(x),
+        storePrice:p&&p.storePrice!=null?p.storePrice:null,
+        netPrice:x.netPrice!=null?x.netPrice:(p&&p.netPrice!=null?p.netPrice:null),
+        kcal:p&&p.kcal!=null?p.kcal:null,
+        kcalBasis:(p&&p.kcalBasis)||'',
+        quantity:x.quantity||(p&&p.quantity)||'',
+        imageUrl:x.imageUrl||(p&&p.imageUrl)||'',
+        source:'retail',
+        retailer:x.retailer||'',
+        sourceUrl:x.sourceUrl||''
+      });
+    }
+  }
+
+  if((!p||!p.name||p.name==='未登録商品'||/^JAN /.test(p.name))&&makerOptedIn(jan)){
     const mj=await fetchJson('/api/maker/lookup?jan='+encodeURIComponent(jan),5500);
     if(mj&&mj.product){
       const x=mj.product;
@@ -610,7 +661,15 @@ async function lookupJan(raw){
 
   if(!p){
     const maker=makerForJan(jan);
-    p={id:'jan-'+jan,jan:jan,name:'未登録商品',category:'snack',storePrice:null,netPrice:null,kcal:null,source:'manual',makerOptInAvailable:maker&&!S.makerOptIns[maker.id]?maker:null};
+    p={
+      id:'jan-'+jan,jan:jan,name:'未登録商品',category:'snack',storePrice:null,netPrice:null,kcal:null,source:'manual',
+      makerOptInAvailable:maker&&!S.makerOptIns[maker.id]?maker:null,
+      retailOptInAvailable:enabledRetail.length===0,
+      retailAttempted
+    };
+  }else if(p.source==='manual'){
+    p.retailOptInAvailable=enabledRetail.length===0;
+    p.retailAttempted=retailAttempted;
   }
   p.category=p.category&&CAT[p.category]?p.category:inferCategory(p);
   if(p.source!=='demo'&&p.source!=='manual'&&!/^JAN /.test(p.name))saveProduct(p);
@@ -620,7 +679,7 @@ async function lookupJan(raw){
 }
 async function doLookup(jan){
   const e=$('#result');
-  if(e)e.innerHTML='<p class="loading">西友・商品DB・メーカー公式を照会しています…</p>';
+  if(e)e.innerHTML='<p class="loading">西友・商品DB・ONの外部検索先を照会しています…</p>';
   S.last=await lookupJan(jan);
   if(S.last&&S.last.product&&navigator.vibrate)navigator.vibrate(45);
   if(e)e.innerHTML=scanResult(S.last);
@@ -925,6 +984,11 @@ function render(){
 function bind(){
   const settings=$('#settings');
   if(settings)settings.onclick=()=>{S.route='options';S.reasonFor=null;render()};
+  $$('[data-retail-optin]').forEach(x=>x.onchange=()=>{
+    S.retailOptIns[x.dataset.retailOptin]=!!x.checked;
+    savePrefs();
+    toast((RETAIL_OPTIONS.find(m=>m.id===x.dataset.retailOptin)||{label:'検索先'}).label+'検索を'+(x.checked?'ON':'OFF')+'にしました');
+  });
   $$('[data-maker-optin]').forEach(x=>x.onchange=()=>{
     S.makerOptIns[x.dataset.makerOptin]=!!x.checked;
     savePrefs();
