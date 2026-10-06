@@ -57,6 +57,7 @@ assert.ok(app.includes('makerOptedIn(jan)'),'manufacturer opt-in gate missing');
 assert.ok(app.includes('retailOptedInIds()'),'retail opt-in gate missing');
 assert.ok(app.includes('data-retail-optin'),'retail settings toggles missing');
 assert.ok(app.includes('data-reader-optin'),'reader opt-in toggle missing');
+assert.ok(app.includes("&reader=1',9000"),'Seiyu nutrition lookup must always enable the server-side Reader fallback');
 assert.ok(app.includes("reader='+(S.readerOptIn?'1':'0')"),'reader opt-in gate missing from retail request');
 assert.ok(app.includes('/api/retail/lookup?jan='),'retail JAN lookup missing');
 assert.ok(app.includes("cache:'no-store'"),'lookup requests must bypass browser HTTP cache');
