@@ -375,9 +375,9 @@ function renderScan(){
 }
 function renderNameResults(){
   if(!S.nameResults.length)return'';
-  return '<div class="name-hits">'+S.nameResults.slice(0,6).map(x=>
+  return '<div class="name-hits">'+S.nameResults.slice(0,6).map((x,i)=>
     '<article class="name-hit"><a target="_blank" rel="noreferrer" href="'+esc(x.url)+'"><span><b>'+esc(x.name)+'</b><small>'+esc(x.size||'')+'</small></span><strong>'+yen(x.taxIncludedPrice||x.price)+'</strong></a>'+
-    (x.jan?'<button data-lookup-jan="'+esc(x.jan)+'">JANで詳しく</button>':'')+'</article>'
+    '<button data-name-result="'+i+'">この商品を登録</button></article>'
   ).join('')+'</div>';
 }
 async function runNameSearch(q){
@@ -388,6 +388,69 @@ async function runNameSearch(q){
   if(box)box.innerHTML='<p class="loading">西友を検索しています…</p>';
   S.nameResults=await searchSeiyu(q);
   if(box)box.innerHTML=renderNameResults()||'<p class="empty">候補が見つかりませんでした。</p>';
+  bind();
+}
+
+function productFromNameResult(hit){
+  const jan=normalizeJan(hit&&hit.jan);
+  const name=String(hit&&hit.name||'').trim()||'未登録商品';
+  const rawPrice=hit&&(hit.taxIncludedPrice??hit.price);
+  const netPrice=rawPrice!==null&&rawPrice!==''&&Number.isFinite(Number(rawPrice))?Number(rawPrice):null;
+  const key=encodeURIComponent((hit&&hit.url)||name+'-'+String(hit&&hit.size||'')).slice(-120);
+  return {
+    id:jan?'jan-'+jan:'seiyu-'+key,
+    jan,
+    name,
+    category:inferCategory({name,quantity:hit&&hit.size||''}),
+    storePrice:null,
+    netPrice,
+    netPriceSource:netPrice==null?null:'seiyu',
+    kcal:null,
+    kcalBasis:'',
+    quantity:String(hit&&hit.size||''),
+    imageUrl:String(hit&&hit.imageUrl||''),
+    source:'seiyu',
+    sourceUrl:String(hit&&hit.url||''),
+    nutritionSource:'',
+    nutritionSourceUrl:''
+  };
+}
+
+async function selectNameResult(index){
+  const hit=S.nameResults[Number(index)];
+  if(!hit)return;
+  const box=$('#result');
+  if(box)box.innerHTML='<p class="loading">商品情報を確認しています…</p>';
+
+  const picked=productFromNameResult(hit);
+  const looked=picked.jan?await lookupJan(picked.jan,{persist:false}):null;
+  const found=looked&&looked.product&&!looked.error?looked.product:{};
+  const product=Object.assign({},picked,found,{
+    id:found.id||picked.id,
+    jan:picked.jan||found.jan||'',
+    name:picked.name,
+    category:found.category&&CAT[found.category]?found.category:picked.category,
+    storePrice:found.storePrice!=null?found.storePrice:picked.storePrice,
+    netPrice:picked.netPrice!=null?picked.netPrice:(found.netPrice!=null?found.netPrice:null),
+    netPriceSource:picked.netPrice!=null?'seiyu':(found.netPriceSource||null),
+    kcal:found.kcal!=null?found.kcal:picked.kcal,
+    kcalBasis:found.kcalBasis||picked.kcalBasis,
+    quantity:picked.quantity||found.quantity||'',
+    imageUrl:found.imageUrl||picked.imageUrl||'',
+    source:'seiyu',
+    sourceUrl:picked.sourceUrl||found.sourceUrl||'',
+    nutritionSource:found.nutritionSource||'',
+    nutritionSourceUrl:found.nutritionSourceUrl||''
+  });
+  S.last=Object.assign({},looked||{},{
+    product,
+    seiyu:[hit],
+    exactSeiyu:(looked&&looked.exactSeiyu)||null
+  });
+  if(box){
+    box.innerHTML=scanResult(S.last);
+    box.scrollIntoView({behavior:'smooth',block:'start'});
+  }
   bind();
 }
 
@@ -418,7 +481,7 @@ function scanResult(r){
   html+='<section class="card result">'+
     '<div class="result-head">'+
       (p.imageUrl?'<img src="'+esc(p.imageUrl)+'" alt="" loading="lazy">':'')+
-      '<div><span class="badge">JAN '+esc(p.jan)+'</span>'+
+      '<div>'+(p.jan?'<span class="badge">JAN '+esc(p.jan)+'</span>':'<span class="badge">商品名検索</span>')+
       (sourceLabel(p)?'<span class="badge source">'+esc(sourceLabel(p))+'</span>':'')+
       '<h3>'+esc(p.name)+'</h3>'+
       (p.quantity?'<small>'+esc(p.quantity)+'</small>':'')+
@@ -554,7 +617,7 @@ function inferCategory(p){
   if(/おにぎり|弁当|丼|サンド|寿司|そば|うどん|パスタ|焼きそば|惣菜/.test(text))return'lunch';
   return'snack';
 }
-async function lookupJan(raw){
+async function lookupJan(raw,opts){
   const jan=normalizeJan(raw);
   if(!validJan(jan))return{error:'JAN/EANコードを確認してください（8〜14桁）'};
 
@@ -713,7 +776,7 @@ async function lookupJan(raw){
       if(p.netPrice!=null)p.netPriceSource='seiyu';
     }
   }
-  if(p.source!=='manual'&&!/^JAN /.test(p.name))saveProduct(p);
+  if(p.source!=='manual'&&!/^JAN /.test(p.name)&&(!opts||opts.persist!==false))saveProduct(p);
   return{product:p,seiyu:seiyu,exactSeiyu:exactSeiyu};
 }
 async function doLookup(jan){
@@ -739,12 +802,12 @@ async function makeDetector(){
 }
 async function startScan(){
   if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){
-    toast('このブラウザではカメラを使えません。JAN手入力を使ってください。');
+    toast('このブラウザではカメラを使えません。商品名検索かバーコード写真を使ってください。');
     return;
   }
   const detector=await makeDetector();
   if(!detector){
-    toast('自動読取に未対応です。JAN手入力を使ってください。');
+    toast('自動読取に未対応です。商品名検索かバーコード写真を使ってください。');
     return;
   }
   try{
@@ -772,7 +835,7 @@ async function startScan(){
 async function scanBarcodeImage(file){
   if(!file)return;
   const detector=await makeDetector();
-  if(!detector){toast('画像の自動読取に未対応です。JAN手入力を使ってください。');return}
+  if(!detector){toast('画像の自動読取に未対応です。商品名検索かバーコード写真を使ってください。');return}
   try{
     const bitmap=await createImageBitmap(file);
     const found=await detector.detect(bitmap);
@@ -1130,7 +1193,8 @@ function bind(){
   if(pq)pq.oninput=applyProductQuery;
   if(pqc)pqc.onclick=()=>{S.productQuery='';pq.value='';applyProductQuery();pq.focus()};
   $$('[data-rescan]').forEach(b=>b.onclick=()=>{S.route='scan';S.last=null;render();doLookup(b.dataset.rescan)});
-  $$('[data-lookup-jan]').forEach(b=>b.onclick=()=>doLookup(b.dataset.lookupJan));
+  $('[data-name-result]').forEach(b=>b.onclick=()=>selectNameResult(b.dataset.nameResult));
+  $('[data-lookup-jan]').forEach(b=>b.onclick=()=>doLookup(b.dataset.lookupJan));
   $$('[data-use-product]').forEach(b=>b.onclick=()=>{
     const p=productById(b.dataset.useProduct)||(S.last&&Array.isArray(S.last.alternatives)?S.last.alternatives.find(x=>x.id===b.dataset.useProduct):null);
     if(!p)return;
