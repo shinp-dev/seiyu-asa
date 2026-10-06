@@ -117,6 +117,22 @@ try{
   assert.equal(j.item.kcalBasis,'1個当り');
   assert.equal(j.fetchVia,'jina-reader');
   assert.equal(calls.length,3,'direct fetch plus explicit reader fallback required');
+
+  calls=[];
+  let readerAttempts=0;
+  globalThis.fetch=async url=>{
+    calls.push(String(url));
+    if(!String(url).startsWith('https://r.jina.ai/'))return new Response('Forbidden',{status:403});
+    readerAttempts++;
+    return readerAttempts===1
+      ?new Response('Temporary unavailable',{status:503})
+      :new Response(mockReader,{status:200});
+  };
+  r=await seiyuModule.onRequestGet({request:new Request('https://example.test/api/seiyu/product?jan=4903110330523&reader=1')});
+  j=await r.json();
+  assert.equal(j.item.kcal,480,'Reader fallback must recover from one transient failure');
+  assert.equal(readerAttempts,2,'Reader fallback should retry once');
+  assert.equal(calls.length,3,'direct fetch plus two Reader attempts expected after one transient failure');
 }finally{
   globalThis.fetch=originalFetch;
 }

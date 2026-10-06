@@ -101,14 +101,22 @@ async function fetchPage(url){
   }catch(e){return ''}
 }
 async function fetchReader(url){
-  try{
-    const r=await fetch('https://r.jina.ai/'+url,{
-      headers:{accept:'text/plain',dnt:'1','x-respond-with':'content'},
-      cache:'no-store'
-    });
-    return r.ok?await r.text():'';
-  }catch(e){return ''}
+  for(let attempt=0;attempt<2;attempt++){
+    try{
+      const r=await fetch('https://r.jina.ai/'+url,{
+        headers:{accept:'text/plain',dnt:'1','x-respond-with':'content'},
+        cache:'no-store'
+      });
+      if(r.ok){
+        const body=await r.text();
+        if(body)return body;
+      }
+    }catch(e){}
+    if(attempt===0)await delay(1200);
+  }
+  return '';
 }
+function delay(ms){return new Promise(resolve=>setTimeout(resolve,ms))}
 function clean(s){
   return String(s||'')
     .replace(/<script[\s\S]*?<\/script>/gi,' ')
