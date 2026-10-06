@@ -58,6 +58,8 @@ assert.ok(makerLookup.includes("'cache-control':'no-store'"),'maker lookup respo
 assert.ok(retailLookup.includes("id:'beisia'"),'Beisia retail route missing');
 assert.ok(retailLookup.includes("id:'tokiwa'"),'Tokiwa retail route missing');
 assert.ok(retailLookup.includes("id:'youme'"),'Youme retail route missing');
+assert.ok(retailLookup.includes("id:'rakutenmart'"),'Rakuten Mart product-information route missing');
+assert.ok(!retailLookup.includes('netPrice'),'external retailer prices must never populate the Seiyu net price');
 assert.ok(retailLookup.includes("if(!requested.length)"),'retail lookup must require explicit opt-in sources');
 assert.ok(retailLookup.includes("compact.includes(jan)"),'retail lookup must require exact JAN in fetched page');
 assert.ok(retailLookup.includes("u.searchParams.get('reader')==='1'"),'reader fallback must require explicit opt-in');
@@ -114,5 +116,7 @@ assert.equal(retail.kcalBasis,'1個当り');
 assert.equal(getRetail(retailHtml,'https://example.test/notfound',{label:'テスト店',id:'test'},'4903110330524'),null,'wrong JAN must be rejected');
 assert.ok(app.includes('||p.kcal==null)&&enabledRetail.length'),'missing kcal must trigger retail requery');
 assert.ok(app.includes('nutritionSourceUrl'),'nutrition source must be present in rendered product');
+assert.ok(app.includes("netPrice:p&&p.netPrice!=null?p.netPrice:null"),'external lookup must preserve only an existing Seiyu net price');
+assert.ok(app.includes('価格には使わない'),'settings must explain that external retailer prices are ignored');
 
 console.log('smoke: OK');
