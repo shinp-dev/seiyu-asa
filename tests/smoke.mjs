@@ -58,5 +58,7 @@ assert.ok(retailLookup.includes("compact.includes(jan)"),'retail lookup must req
 assert.ok(retailLookup.includes("u.searchParams.get('reader')==='1'"),'reader fallback must require explicit opt-in');
 assert.ok(retailLookup.includes("https://r.jina.ai/"),'Jina Reader fallback missing');
 assert.ok(retailLookup.includes("extractReaderProduct"),'reader response parser missing');
+assert.ok(retailLookup.includes("decodeHtml"),'retailer charset decoder missing');
+assert.ok(retailLookup.includes("'shift_jis'"),'Shift_JIS retailer pages must be decoded');
 
 console.log('smoke: OK');
