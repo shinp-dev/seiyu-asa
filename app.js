@@ -1193,8 +1193,8 @@ function bind(){
   if(pq)pq.oninput=applyProductQuery;
   if(pqc)pqc.onclick=()=>{S.productQuery='';pq.value='';applyProductQuery();pq.focus()};
   $$('[data-rescan]').forEach(b=>b.onclick=()=>{S.route='scan';S.last=null;render();doLookup(b.dataset.rescan)});
-  $('[data-name-result]').forEach(b=>b.onclick=()=>selectNameResult(b.dataset.nameResult));
-  $('[data-lookup-jan]').forEach(b=>b.onclick=()=>doLookup(b.dataset.lookupJan));
+  $$('[data-name-result]').forEach(b=>b.onclick=()=>selectNameResult(b.dataset.nameResult));
+  $$('[data-lookup-jan]').forEach(b=>b.onclick=()=>doLookup(b.dataset.lookupJan));
   $$('[data-use-product]').forEach(b=>b.onclick=()=>{
     const p=productById(b.dataset.useProduct)||(S.last&&Array.isArray(S.last.alternatives)?S.last.alternatives.find(x=>x.id===b.dataset.useProduct):null);
     if(!p)return;
