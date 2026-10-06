@@ -61,6 +61,8 @@ assert.ok(makerLookup.includes("'cache-control':'no-store'"),'maker lookup respo
 assert.ok(retailLookup.includes("id:'beisia'"),'Beisia retail route missing');
 assert.ok(retailLookup.includes("id:'tokiwa'"),'Tokiwa retail route missing');
 assert.ok(retailLookup.includes("id:'youme'"),'Youme retail route missing');
+assert.ok(retailLookup.includes("id:'rakutenmart'"),'Rakuten Mart nutrition route missing');
+assert.ok(retailLookup.includes('fallbackProduct'),'retail lookup should keep searching for nutrition after a name-only match');
 assert.ok(retailLookup.includes("if(!requested.length)"),'retail lookup must require explicit opt-in sources');
 assert.ok(retailLookup.includes("compact.includes(jan)"),'retail lookup must require exact JAN in fetched page');
 assert.ok(retailLookup.includes("u.searchParams.get('reader')==='1'"),'reader fallback must require explicit opt-in');
@@ -116,6 +118,13 @@ assert.equal(retail.kcal,480,'retailer nutrition must be parsed by exact JAN');
 assert.equal(retail.netPrice,null,'retailer price must be ignored even when item is identified');
 assert.equal(retail.kcalBasis,'1個当り');
 assert.equal(getRetail(retailHtml,'https://example.test/notfound',{label:'テスト店',id:'test'},'4903110330524'),null,'wrong JAN must be rejected');
+const rakutenHtml='<html><head><title>イチゴスペシャル｜楽天マート - ネットスーパー</title></head><body><h1>イチゴスペシャル</h1><p>商品説明</p><p>栄養成分：熱量502kcal、たんぱく質6.0g</p><p>内容量 1個</p></body></html>';
+const rakuten=getRetail(rakutenHtml,'https://sm.rakuten.co.jp/item/4903110330523',{label:'楽天マート',id:'rakutenmart',janInUrl:true},'4903110330523');
+assert.equal(rakuten.name,'イチゴスペシャル','exact JAN URL should identify Rakuten Mart item even when JAN is not printed in body');
+assert.equal(rakuten.kcal,502,'Rakuten Mart nutrition should be parsed');
+assert.equal(rakuten.kcalBasis,'1個あたり','quantity should supply the kcal basis when the nutrition row omits it');
+assert.equal(rakuten.netPrice,null,'Rakuten Mart price must not be used');
+assert.equal(getRetail(rakutenHtml,'https://sm.rakuten.co.jp/item/9999999999999',{label:'楽天マート',id:'rakutenmart',janInUrl:true},'4903110330523'),null,'JAN URL mismatch must be rejected');
 assert.ok(app.includes('||p.kcal==null)&&enabledRetail.length'),'missing kcal must trigger retail requery');
 assert.ok(app.includes('nutritionSourceUrl'),'nutrition source must be present in rendered product');
 
