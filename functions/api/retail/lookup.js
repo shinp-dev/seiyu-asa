@@ -13,6 +13,12 @@ const RETAILERS=[
     id:'youme',
     label:'ゆめデリバリー',
     url:jan=>'https://delivery.youmetown.com/shop/g/g'+encodeURIComponent(jan)+'/'
+  },
+  {
+    id:'rakutenmart',
+    label:'楽天マート',
+    janInUrl:true,
+    url:jan=>'https://sm.rakuten.co.jp/item/'+encodeURIComponent(jan)
   }
 ];
 
@@ -30,6 +36,8 @@ export async function onRequestGet(ctx){
 
   const selected=RETAILERS.filter(x=>requested.includes(x.id));
   const attempted=[];
+  let fallbackProduct=null;
+  let fallbackReaderUsed=false;
 
   for(const retailer of selected){
     attempted.push(retailer.id);
@@ -38,24 +46,38 @@ export async function onRequestGet(ctx){
     let readerUsed=false;
     let product=body?extractProduct(body,sourceUrl,retailer,jan):null;
 
-    if(!product&&allowReader){
-      body=await getReaderText(sourceUrl);
-      readerUsed=!!body;
-      product=body?extractReaderProduct(body,sourceUrl,retailer,jan):null;
+    if((!product||product.kcal==null)&&allowReader){
+      const readerBody=await getReaderText(sourceUrl);
+      if(readerBody){
+        const readerProduct=extractReaderProduct(readerBody,sourceUrl,retailer,jan);
+        if(readerProduct){
+          readerUsed=true;
+          if(!product)product=readerProduct;
+          else if(product.kcal==null&&readerProduct.kcal!=null){
+            product.kcal=readerProduct.kcal;
+            product.kcalBasis=readerProduct.kcalBasis;
+            product.nutritionSource=readerProduct.nutritionSource;
+            product.nutritionSourceUrl=readerProduct.nutritionSourceUrl;
+            if(!product.quantity&&readerProduct.quantity)product.quantity=readerProduct.quantity;
+          }
+        }
+      }
     }
 
     if(product){
       product.fetchVia=readerUsed?'jina-reader':'direct';
-      return json({product,attempted,readerUsed});
+      if(product.kcal!=null)return json({product,attempted,readerUsed});
+      if(!fallbackProduct){fallbackProduct=product;fallbackReaderUsed=readerUsed;}
     }
   }
+  if(fallbackProduct)return json({product:fallbackProduct,attempted,readerUsed:fallbackReaderUsed});
   return json({product:null,attempted,readerUsed:false});
 }
 
 function extractProduct(html,sourceUrl,retailer,jan){
   const raw=String(html||'');
   const compact=raw.replace(/[\s\-‐‑–—]/g,'');
-  if(!compact.includes(jan))return null;
+  if(!exactJanMatch(raw,sourceUrl,retailer,jan))return null;
 
   const h1=clean((raw.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i)||[])[1]||'');
   const ogTitle=decodeAttr((raw.match(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i)||[])[1]||'');
@@ -64,15 +86,18 @@ function extractProduct(html,sourceUrl,retailer,jan){
   if(!name)return null;
 
   const text=clean(raw);
+  if(retailer.janInUrl&&!compact.includes(jan)&&!/(商品説明|栄養成分|かごに追加)/.test(text))return null;
   const imageUrl=decodeAttr((raw.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i)||[])[1]||'');
+  const quantity=(text.match(/内容量[^0-9]{0,20}(\d+(?:\.\d+)?\s*(?:g|kg|ml|mL|L|個|本|袋|枚|食))/i)||[])[1]||'';
   const nutrition=extractNutrition(text);
+  if(nutrition.kcal!=null&&nutrition.kcalBasis==='掲載単位を確認'&&quantity)nutrition.kcalBasis=quantity+'あたり';
 
   return{
     jan,
     name,
     brand:'',
     manufacturer:'',
-    quantity:'',
+    quantity,
     netPrice:null,
     imageUrl,
     kcal:nutrition.kcal,
@@ -89,7 +114,7 @@ function extractProduct(html,sourceUrl,retailer,jan){
 function extractReaderProduct(body,sourceUrl,retailer,jan){
   const raw=String(body||'');
   const compact=raw.replace(/[\s\-‐‑–—]/g,'');
-  if(!compact.includes(jan))return null;
+  if(!exactJanMatch(raw,sourceUrl,retailer,jan))return null;
 
   const titleLine=(raw.match(/^Title:\s*(.+)$/mi)||[])[1]||'';
   const headings=Array.from(raw.matchAll(/^#{1,3}\s+(.+)$/gm)).map(m=>m[1].trim());
@@ -97,8 +122,10 @@ function extractReaderProduct(body,sourceUrl,retailer,jan){
   const name=cleanName(heading||titleLine,retailer.label);
   if(!name)return null;
 
-  const quantity=(raw.match(/(?:^|\s)(\d+(?:\.\d+)?\s*(?:g|kg|ml|mL|L|個|本|袋|枚|食))(?:\s|$)/m)||[])[1]||'';
+  if(retailer.janInUrl&&!compact.includes(jan)&&!/(商品説明|栄養成分|かごに追加)/.test(raw))return null;
+  const quantity=(raw.match(/(?:内容量\s*[|：:]?\s*|^|\s)(\d+(?:\.\d+)?\s*(?:g|kg|ml|mL|L|個|本|袋|枚|食))(?:\s|$)/m)||[])[1]||'';
   const nutrition=extractNutrition(raw);
+  if(nutrition.kcal!=null&&nutrition.kcalBasis==='掲載単位を確認'&&quantity)nutrition.kcalBasis=quantity+'あたり';
 
   return{
     jan,
@@ -117,6 +144,17 @@ function extractReaderProduct(body,sourceUrl,retailer,jan){
     source:'retail',
     sourceUrl
   };
+}
+
+function exactJanMatch(raw,sourceUrl,retailer,jan){
+  const compact=String(raw||'').replace(/[\s\-‐‑–—]/g,'');
+  if(compact.includes(jan))return true;
+  if(!retailer||!retailer.janInUrl)return false;
+  try{
+    const u=new URL(sourceUrl);
+    const parts=u.pathname.split('/').filter(Boolean);
+    return parts[parts.length-1]===jan;
+  }catch(e){return false}
 }
 
 function extractNutrition(text){
