@@ -345,15 +345,15 @@ function accept(){
 }
 
 function renderOptions(){
-  return '<section class="hero"><small>外部問い合わせ</small><h2>商品情報の検索先</h2><p>すべてOFFが初期値です。西友・商品DBで見つからない時だけ、ONにした検索先へJANを送ります。</p></section>'+
+  return '<section class="hero"><small>外部問い合わせ</small><h2>商品情報の検索先</h2><p>西友は価格・栄養情報の主取得先です。ここでONにした検索先は、西友・商品DBだけで足りない時の補助に使います。</p></section>'+
   '<div class="title"><h3>ネットスーパー</h3><span>商品名・栄養情報のみ</span></div>'+
   '<section class="card settings">'+
     RETAIL_OPTIONS.map(m=>'<label class="setting-row"><span><b>'+esc(m.label)+'</b><small>JANを公開商品ページへ送信</small></span><input type="checkbox" data-retail-optin="'+esc(m.id)+'" '+(S.retailOptIns[m.id]?'checked':'')+'></label>').join('')+
   '</section>'+
-  '<div class="title"><h3>ページ取得補助</h3><span>必要な時だけ</span></div>'+
+  '<div class="title"><h3>外部ネットスーパーの取得補助</h3><span>必要な時だけ</span></div>'+
   '<section class="card settings">'+
-    '<label class="setting-row"><span><b>Jina Reader</b><small>ネットスーパー直取得が拒否された時だけ、商品ページURL（JANを含む）を外部の無料Readerへ送信</small></span><input type="checkbox" data-reader-optin="1" '+(S.readerOptIn?'checked':'')+'></label>'+
-    '<p class="mini-note privacy-note">初期OFFです。ONのネットスーパーがある場合だけ使います。Jina Readerは無認証の無料枠を使用します。</p>'+
+    '<label class="setting-row"><span><b>Jina Reader</b><small>ONにした外部ネットスーパーの直取得が拒否された時だけ、商品ページURL（JANを含む）を無料Readerへ送信</small></span><input type="checkbox" data-reader-optin="1" '+(S.readerOptIn?'checked':'')+'></label>'+
+    '<p class="mini-note privacy-note">初期OFFです。ベイシア等の補助取得にだけ使います。西友は価格・栄養情報を取るため、サーバー側で取得補助を自動利用します。</p>'+
   '</section>'+
   '<div class="title"><h3>メーカー公式</h3><span>補助検索</span></div>'+
   '<section class="card settings">'+
@@ -626,7 +626,9 @@ async function lookupJan(raw,opts){
   const enabledRetail=retailOptedInIds();
   let retailAttempted=[];
 
-  const sj=await fetchJson('/api/seiyu/product?jan='+encodeURIComponent(jan)+'&reader='+(S.readerOptIn?'1':'0'),9000);
+  // Seiyu is the primary source for price/nutrition. Use the server-side Reader fallback automatically
+  // when the public item page rejects a direct fetch. External retailer Reader use remains opt-in.
+  const sj=await fetchJson('/api/seiyu/product?jan='+encodeURIComponent(jan)+'&reader=1',9000);
   if(sj&&sj.item){
     exactSeiyu=sj.item;
     p=Object.assign({},p||{},{
