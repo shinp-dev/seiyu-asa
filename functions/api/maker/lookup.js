@@ -77,9 +77,9 @@ async function lookupOfficial(maker,jan){
 async function lookupSearchPage(target,maker,jan){
   const html=await getHtml(target);
   if(!html)return null;
-  const direct=extractProduct(html,target,maker,jan);
-  if(direct)return direct;
 
+  // The Yamazaki search page echoes the JAN in the query and its own title.
+  // Never treat that search shell itself as a product page.
   const links=Array.from(html.matchAll(/href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi))
     .map(m=>({href:m[1],label:clean(m[2])}))
     .filter(x=>x.label&&x.href)
@@ -99,6 +99,8 @@ async function lookupSearchPage(target,maker,jan){
 }
 
 function extractProduct(html,sourceUrl,maker,jan){
+  if(/search\.yamazakipan\.co\.jp/i.test(sourceUrl))return null;
+
   const compact=String(html||'').replace(/[\s\-‐‑–—]/g,'');
   if(!compact.includes(jan))return null;
 
@@ -110,6 +112,7 @@ function extractProduct(html,sourceUrl,maker,jan){
     .replace(/\s*[｜|].*$/,'')
     .replace(/^商品詳細\s*/,'')
     .trim();
+  if(!name||/サイト内検索|site\s*search|検索結果/i.test(name))return null;
 
   const normalized=text.replace(/[\s\-‐‑–—]/g,'');
   const pos=normalized.indexOf(jan);
@@ -161,7 +164,7 @@ function json(v,status=200){
     status,
     headers:{
       'content-type':'application/json; charset=utf-8',
-      'cache-control':'public, max-age=1800'
+      'cache-control':'no-store'
     }
   });
 }
